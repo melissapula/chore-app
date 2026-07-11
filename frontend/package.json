@@ -1,0 +1,21 @@
+{
+  "name": "frontend",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "nuxt build",
+    "dev": "nuxt dev",
+    "generate": "nuxt generate",
+    "preview": "nuxt preview",
+    "postinstall": "nuxt prepare"
+  },
+  "dependencies": {
+    "@mfp-design-system/all": "^5.0.0",
+    "@mfp-design-system/tokens": "^0.9.0",
+    "@nuxtjs/supabase": "^2.0.9",
+    "@vite-pwa/nuxt": "^1.1.1",
+    "nuxt": "^4.4.8",
+    "vue": "^3.5.39",
+    "vue-router": "^5.1.0"
+  }
+}
