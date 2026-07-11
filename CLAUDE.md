@@ -34,7 +34,7 @@ timer/competition mechanic, then wrap with Capacitor for the app stores later.
 
 | Layer | Choice |
 |---|---|
-| Database / Auth / Realtime | **Supabase** (Postgres + RLS + Realtime + Auth) |
+| Database / Auth / Realtime | **Supabase** (Postgres + RLS + Realtime + Auth) — see hosting note below |
 | Backend API + jobs | **NestJS** (`backend/`) |
 | Frontend | **Nuxt** installable **PWA** (`frontend/`) |
 | UI components | **`@mfp-design-system/*`** (Missa's Lit web-component design system, from npm) |
@@ -57,6 +57,25 @@ components. The theme can later be upstreamed into the design system as
 Two chore flows share one instance table but use different state sets:
 - **Paid:** `OPEN → CLAIMED → IN_PROGRESS → SUBMITTED → APPROVED` (claim/race + timers)
 - **Required:** `ASSIGNED → SUBMITTED → CONFIRMED`, or `→ MISSED` at the due date
+
+### Hosting note — shared Supabase project, `chore` schema
+
+To stay on Supabase's free tier (2-project cap), this app does **not** get its own
+Supabase project. It lives inside the existing **Frula (`fsbo-platform`)** project —
+which is empty (no signups) — inside a dedicated **`chore` schema**, fully isolated
+from Frula's `public` tables. Auth (`auth.users`) is shared project-wide, which is
+fine since Frula has no users.
+
+Consequences to remember:
+- Every DB call targets the `chore` schema. Backend clients set `db.schema = 'chore'`;
+  the frontend Supabase module sets `clientOptions.db.schema = 'chore'`. So
+  `.from('households')` → `chore.households` automatically.
+- RPCs: `supabase.schema('chore').rpc('bootstrap_household', {...})`.
+- **One-time manual step:** after applying the migrations, expose the schema —
+  Supabase Dashboard → Project Settings → API → **Exposed schemas** → add `chore`.
+  Without this, PostgREST returns 404 for `chore.*` tables.
+- All `chore` objects (tables, enums, helper fns) are namespaced, so there's zero
+  collision risk with Frula.
 
 ---
 

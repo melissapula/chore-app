@@ -51,7 +51,12 @@ export default defineNuxtConfig({
   },
 
   // @nuxtjs/supabase reads SUPABASE_URL + SUPABASE_KEY from env.
+  // Points at the shared Frula project; app data lives in the `chore` schema, so
+  // default all PostgREST calls there (auth is unaffected — it uses auth.*).
   supabase: {
+    clientOptions: {
+      db: { schema: 'chore' },
+    },
     redirectOptions: {
       login: '/login',
       callback: '/confirm',

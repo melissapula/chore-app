@@ -1,14 +1,24 @@
 -- ============================================================================
 -- Chore App — 0001 initial schema
--- Multi-tenant family chore tracker. Every table carries household_id for
--- tenant isolation; RLS policies live in 0002_rls_policies.sql.
--- Mirrors SPEC.md §4 (data model). SPEC.md is the source of truth.
+-- Multi-tenant family chore tracker. Lives in a dedicated `chore` schema so it
+-- can share the (currently empty) Frula Supabase project without touching
+-- Frula's own `public` tables. Auth is shared project-wide (auth.users), which
+-- is fine — the project has no other signups.
+--
+-- Every table carries household_id for tenant isolation; RLS lives in
+-- 0002_rls_policies.sql. Mirrors SPEC.md §4. SPEC.md is the source of truth.
+--
+-- NOTE: after applying, expose the schema to the API:
+--   Supabase Dashboard → Project Settings → API → "Exposed schemas" → add `chore`.
 -- ============================================================================
 
-create extension if not exists "pgcrypto";  -- gen_random_uuid()
+create schema if not exists chore;
+set search_path = chore, public;
+
+-- gen_random_uuid() is built into Postgres 13+ (Supabase is 15+), no extension needed.
 
 -- ---------------------------------------------------------------------------
--- Enums
+-- Enums (created in the chore schema via search_path)
 -- ---------------------------------------------------------------------------
 create type user_role       as enum ('parent', 'kid');
 create type chore_type      as enum ('paid', 'required');

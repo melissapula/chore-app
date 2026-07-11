@@ -30,9 +30,16 @@ supabase/migrations/  Postgres schema + RLS policies (run in order)
 
 ### 1. Database (Supabase)
 
-Create a Supabase project, then apply the migrations in `supabase/migrations/`
-in filename order — either via the Supabase SQL editor (paste each file) or the
-Supabase CLI (`supabase db push`). This creates the multi-tenant schema and RLS.
+This app shares the existing **Frula (`fsbo-platform`)** Supabase project to stay on
+the free tier — its tables live in an isolated **`chore` schema**, not `public`.
+
+1. Apply the migrations in `supabase/migrations/` in filename order (Supabase SQL
+   editor, or `supabase db push`). They create the `chore` schema, all tables, RLS,
+   and the grants.
+2. **Expose the schema:** Dashboard → Project Settings → API → **Exposed schemas** →
+   add `chore` (required, or PostgREST 404s on the app tables).
+
+See the hosting note in [`CLAUDE.md`](./CLAUDE.md) for why and the client wiring.
 
 ### 2. Backend
 
