@@ -146,6 +146,10 @@ household + role). The caller must have a `chore.users` row — call the
 - **State transitions are server-side and validated.** A transition checks the
   current state before writing the next one (no illegal jumps).
 - **Update `SPEC.md` in the same commit when you change behavior.** The spec leads.
+- **Pre-commit hook (husky + lint-staged).** On commit, `.husky/pre-commit` runs
+  lint-staged inside `backend/` and `frontend/` separately (monorepo — each uses
+  its own ESLint config + binaries). Staged code gets `eslint --fix` + `prettier
+  --write`. Root-level docs aren't auto-formatted; run `npm run format` for that.
 
 ---
 
