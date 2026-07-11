@@ -1,0 +1,8 @@
+node_modules
+dist
+.nuxt
+.output
+.nitro
+coverage
+**/package-lock.json
+supabase/migrations

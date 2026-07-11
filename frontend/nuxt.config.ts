@@ -6,17 +6,11 @@ export default defineNuxtConfig({
   // Dev server on 3001 so it doesn't collide with the NestJS API on 3000.
   devServer: { port: 3001 },
 
-  modules: [
-    '@nuxtjs/supabase',
-    '@vite-pwa/nuxt',
-  ],
+  modules: ['@nuxt/eslint', '@nuxtjs/supabase', '@vite-pwa/nuxt'],
 
   // Design-system styling. ORDER MATTERS: base tokens first, then our
   // kid-friendly override so it wins the cascade.
-  css: [
-    '@mfp-design-system/tokens/css',
-    '~/assets/css/theme-playful.css',
-  ],
+  css: ['@mfp-design-system/tokens/css', '~/assets/css/theme-playful.css'],
 
   // <mfp-*> are Lit custom elements — tell Vue not to treat them as components.
   vue: {
@@ -83,4 +77,4 @@ export default defineNuxtConfig({
       enabled: true,
     },
   },
-})
+});
