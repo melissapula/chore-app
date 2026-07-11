@@ -95,10 +95,14 @@ chore-app/
 
 ## Build order (from SPEC §8) — work top to bottom
 
-- [ ] **1. Multi-tenant spine.** households + users + auth + RLS.
-      → `supabase/migrations/` holds the schema. Apply it, then create a test household.
-- [ ] **2. Paid chore state machine.** templates + instances + claim→start→submit→approve.
-- [ ] **3. Server-authoritative timers.** stored deadlines + per-minute cron sweep.
+- [x] **1. Multi-tenant spine.** households + users + auth + RLS.
+      → `supabase/migrations/` holds the schema (in the `chore` schema). Apply it, expose the schema, create a test household.
+- [x] **2. Paid chore state machine.** templates + instances + claim→start→submit→approve.
+      → `backend/src/chores/` (templates + spawn) and `backend/src/chore-instances/`
+      (the state machine). Auth via `SupabaseAuthGuard`. Atomic claim (compare-and-set)
+      + atomic approve (`approve_paid_instance()` SQL fn, migration 0003).
+- [~] **3. Server-authoritative timers.** stored deadlines + per-minute cron sweep.
+      → sweep scaffolded in `backend/src/timers/`; revisit finish-timer parent-notify with step 7 push.
 - [ ] **4. Ledger + balances.**
 - [ ] **5. Required chores + weekly pay gate.**
 - [ ] **6. Notes + emojis.**
@@ -108,6 +112,24 @@ chore-app/
 - [ ] **10. Polish → Capacitor wrap → store compliance (COPPA, parental gate, privacy).**
 
 > Ship 1–7 to our own family first. Validate the mechanic before paying the store tax.
+
+### Paid-flow API (step 2)
+
+All routes require `Authorization: Bearer <supabase-jwt>` (SupabaseAuthGuard resolves
+household + role). The caller must have a `chore.users` row — call the
+`bootstrap_household` RPC once after sign-up to create it.
+
+| Method + path | Who | Effect |
+|---|---|---|
+| `POST /chores` | parent | Create a chore template |
+| `GET /chores` | member | List household templates |
+| `POST /chores/:id/instances` | parent | Spawn a paid instance (→ OPEN) |
+| `GET /chore-instances` | member | The household's live pool |
+| `POST /chore-instances/:id/claim` | kid | OPEN → CLAIMED (starts start-timer; atomic race) |
+| `POST /chore-instances/:id/start` | claimer | CLAIMED → IN_PROGRESS (starts finish-timer) |
+| `POST /chore-instances/:id/submit` | claimer | IN_PROGRESS → SUBMITTED |
+| `POST /chore-instances/:id/approve` | parent | SUBMITTED → APPROVED + ledger credit (atomic) |
+| `POST /chore-instances/:id/release` | parent | CLAIMED/IN_PROGRESS/SUBMITTED → OPEN |
 
 ---
 
