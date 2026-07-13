@@ -9,7 +9,7 @@
 -- 0002_rls_policies.sql. Mirrors SPEC.md §4. SPEC.md is the source of truth.
 --
 -- NOTE: after applying, expose the schema to the API:
---   Supabase Dashboard → Project Settings → API → "Exposed schemas" → add `chore`.
+--   Supabase Dashboard → Project Settings → Data API → "Exposed schemas" → add `chore`.
 -- ============================================================================
 
 create schema if not exists chore;

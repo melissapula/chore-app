@@ -4,10 +4,10 @@
 import withNuxt from './.nuxt/eslint.config.mjs';
 
 export default withNuxt(
-  // Custom elements from the design system aren't Vue components.
-  {
-    rules: {
-      'vue/no-undef-components': 'off',
+    // Custom elements from the design system aren't Vue components.
+    {
+        rules: {
+            'vue/no-undef-components': 'off',
+        },
     },
-  },
 );

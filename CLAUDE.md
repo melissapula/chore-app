@@ -8,9 +8,13 @@
 
 ## What this project is
 
-**Chore App** — a multi-tenant family chore tracker with virtual balances, a
-claim/timer competition mechanic for paid chores, required (unpaid) chores that
-gate weekly pay, notes, emojis, and short/long-term savings goals.
+**ChoreQuest** — a multi-tenant family chore tracker reskinned as a light RPG.
+Kids earn **XP** (the money balance, relabeled at 1 XP = 1¢) for chores, race to
+claim paid chores against a timer, and do required (unpaid) chores that gate
+weekly pay. XP funds **quests** — personal rewards a kid levels up to, plus
+family-wide **guild quests** that pool everyone's XP (with a color-coded per-kid
+contribution chart). Kids can also **request** chores for a parent to create.
+Plus a never-dropping lifetime **level**, notes, and emojis.
 
 Ship as an installable **PWA** to our own family first to validate the
 timer/competition mechanic, then wrap with Capacitor for the app stores later.
@@ -23,7 +27,7 @@ timer/competition mechanic, then wrap with Capacitor for the app stores later.
   in real life. No money transmission.
 - **Multi-tenant from day one.** One account = one household, fully isolated via
   Postgres Row-Level Security keyed on `household_id`.
-- **Server-authoritative timers.** Timers are *stored deadlines*, never client
+- **Server-authoritative timers.** Timers are _stored deadlines_, never client
   counters. The backend decides state; the UI only renders `deadline - now`.
 - **Ledger-derived balances.** `ledger_entries` is append-only; a balance is
   `sum(delta_cents)`. Never mutate a single balance number.
@@ -32,13 +36,13 @@ timer/competition mechanic, then wrap with Capacitor for the app stores later.
 
 ## Stack
 
-| Layer | Choice |
-|---|---|
-| Database / Auth / Realtime | **Supabase** (Postgres + RLS + Realtime + Auth) — see hosting note below |
-| Backend API + jobs | **NestJS** (`backend/`) |
-| Frontend | **Nuxt** installable **PWA** (`frontend/`) |
-| UI components | **`@mfp-design-system/*`** (Missa's Lit web-component design system, from npm) |
-| Native wrapper (later) | Capacitor |
+| Layer                      | Choice                                                                         |
+| -------------------------- | ------------------------------------------------------------------------------ |
+| Database / Auth / Realtime | **Supabase** (Postgres + RLS + Realtime + Auth) — see hosting note below       |
+| Backend API + jobs         | **NestJS** (`backend/`)                                                        |
+| Frontend                   | **Nuxt** installable **PWA** (`frontend/`)                                     |
+| UI components              | **`@mfp-design-system/*`** (Missa's Lit web-component design system, from npm) |
+| Native wrapper (later)     | Capacitor                                                                      |
 
 ### UI / design system
 
@@ -55,6 +59,7 @@ components. The theme can later be upstreamed into the design system as
 `themes/playful.css` if we want it shared across apps.
 
 Two chore flows share one instance table but use different state sets:
+
 - **Paid:** `OPEN → CLAIMED → IN_PROGRESS → SUBMITTED → APPROVED` (claim/race + timers)
 - **Required:** `ASSIGNED → SUBMITTED → CONFIRMED`, or `→ MISSED` at the due date
 
@@ -67,12 +72,14 @@ from Frula's `public` tables. Auth (`auth.users`) is shared project-wide, which 
 fine since Frula has no users.
 
 Consequences to remember:
+
 - Every DB call targets the `chore` schema. Backend clients set `db.schema = 'chore'`;
   the frontend Supabase module sets `clientOptions.db.schema = 'chore'`. So
   `.from('households')` → `chore.households` automatically.
 - RPCs: `supabase.schema('chore').rpc('bootstrap_household', {...})`.
 - **One-time manual step:** after applying the migrations, expose the schema —
-  Supabase Dashboard → Project Settings → API → **Exposed schemas** → add `chore`.
+  Supabase Dashboard → Project **Settings → Data API → Exposed schemas** → add
+  `chore`. (Older docs said Settings → API; the dashboard moved it under Data API.)
   Without this, PostgREST returns 404 for `chore.*` tables.
 - All `chore` objects (tables, enums, helper fns) are namespaced, so there's zero
   collision risk with Frula.
@@ -99,16 +106,17 @@ chore-app/
       → `supabase/migrations/` holds the schema (in the `chore` schema). Apply it, expose the schema, create a test household.
 - [x] **2. Paid chore state machine.** templates + instances + claim→start→submit→approve.
       → `backend/src/chores/` (templates + spawn) and `backend/src/chore-instances/`
-      (the state machine). Auth via `SupabaseAuthGuard`. Atomic claim (compare-and-set)
-      + atomic approve (`approve_paid_instance()` SQL fn, migration 0003).
+      (the state machine). Auth via `SupabaseAuthGuard`. Atomic claim (compare-and-set) + atomic approve (`approve_paid_instance()` SQL fn, migration 0003).
 - [~] **3. Server-authoritative timers.** stored deadlines + per-minute cron sweep.
-      → sweep scaffolded in `backend/src/timers/`; revisit finish-timer parent-notify with step 7 push.
+  → sweep scaffolded in `backend/src/timers/`; revisit finish-timer parent-notify with step 7 push.
 - [ ] **4. Ledger + balances.**
 - [ ] **5. Required chores + weekly pay gate.**
 - [ ] **6. Notes + emojis.**
 - [ ] **7. Realtime sync + web push.**
-- [ ] **8. Weekly goal bundle engine** (subset-sum over open chores).
-- [ ] **9. Savings goal pace calculator.**
+- [ ] **8. Quests + XP.** personal reward quests (spend-to-redeem), lifetime
+      levels, weekly bundle engine (subset-sum over open chores → hit an XP target).
+- [ ] **9. Guild quests + extras.** household XP pooling + color-coded per-kid
+      contribution chart, personal-quest pace calculator, kid-initiated chore requests.
 - [ ] **10. Polish → Capacitor wrap → store compliance (COPPA, parental gate, privacy).**
 
 > Ship 1–7 to our own family first. Validate the mechanic before paying the store tax.
@@ -119,17 +127,17 @@ All routes require `Authorization: Bearer <supabase-jwt>` (SupabaseAuthGuard res
 household + role). The caller must have a `chore.users` row — call the
 `bootstrap_household` RPC once after sign-up to create it.
 
-| Method + path | Who | Effect |
-|---|---|---|
-| `POST /chores` | parent | Create a chore template |
-| `GET /chores` | member | List household templates |
-| `POST /chores/:id/instances` | parent | Spawn a paid instance (→ OPEN) |
-| `GET /chore-instances` | member | The household's live pool |
-| `POST /chore-instances/:id/claim` | kid | OPEN → CLAIMED (starts start-timer; atomic race) |
-| `POST /chore-instances/:id/start` | claimer | CLAIMED → IN_PROGRESS (starts finish-timer) |
-| `POST /chore-instances/:id/submit` | claimer | IN_PROGRESS → SUBMITTED |
-| `POST /chore-instances/:id/approve` | parent | SUBMITTED → APPROVED + ledger credit (atomic) |
-| `POST /chore-instances/:id/release` | parent | CLAIMED/IN_PROGRESS/SUBMITTED → OPEN |
+| Method + path                       | Who     | Effect                                           |
+| ----------------------------------- | ------- | ------------------------------------------------ |
+| `POST /chores`                      | parent  | Create a chore template                          |
+| `GET /chores`                       | member  | List household templates                         |
+| `POST /chores/:id/instances`        | parent  | Spawn a paid instance (→ OPEN)                   |
+| `GET /chore-instances`              | member  | The household's live pool                        |
+| `POST /chore-instances/:id/claim`   | kid     | OPEN → CLAIMED (starts start-timer; atomic race) |
+| `POST /chore-instances/:id/start`   | claimer | CLAIMED → IN_PROGRESS (starts finish-timer)      |
+| `POST /chore-instances/:id/submit`  | claimer | IN_PROGRESS → SUBMITTED                          |
+| `POST /chore-instances/:id/approve` | parent  | SUBMITTED → APPROVED + ledger credit (atomic)    |
+| `POST /chore-instances/:id/release` | parent  | CLAIMED/IN_PROGRESS/SUBMITTED → OPEN             |
 
 ---
 
@@ -142,14 +150,14 @@ household + role). The caller must have a `chore.users` row — call the
   `due_date` at transition time. The cron sweep compares them to `now()`. Never
   trust a client-reported elapsed time.
 - **Money lives in the ledger.** To change a balance, append a `ledger_entries`
-  row. The weekly gate governs *payout release*, not whether money was earned.
+  row. The weekly gate governs _payout release_, not whether money was earned.
 - **State transitions are server-side and validated.** A transition checks the
   current state before writing the next one (no illegal jumps).
 - **Update `SPEC.md` in the same commit when you change behavior.** The spec leads.
 - **Pre-commit hook (husky + lint-staged).** On commit, `.husky/pre-commit` runs
   lint-staged inside `backend/` and `frontend/` separately (monorepo — each uses
   its own ESLint config + binaries). Staged code gets `eslint --fix` + `prettier
-  --write`. Root-level docs aren't auto-formatted; run `npm run format` for that.
+--write`. Root-level docs aren't auto-formatted; run `npm run format` for that.
 
 ---
 

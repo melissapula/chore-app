@@ -1,11 +1,12 @@
 import {
-  CanActivate,
-  ExecutionContext,
-  Injectable,
-  UnauthorizedException,
+    CanActivate,
+    ExecutionContext,
+    Injectable,
+    UnauthorizedException,
 } from '@nestjs/common';
 import { SupabaseService } from '../supabase/supabase.service';
-import { AuthUser } from './auth-user.interface';
+import { AuthUser, AuthedRequest } from './auth-user.interface';
+import { DbResult, UserRole } from '../db-types';
 
 /**
  * Validates the `Authorization: Bearer <jwt>` header against Supabase Auth,
@@ -18,42 +19,44 @@ import { AuthUser } from './auth-user.interface';
  */
 @Injectable()
 export class SupabaseAuthGuard implements CanActivate {
-  constructor(private readonly supabase: SupabaseService) {}
+    constructor(private readonly supabase: SupabaseService) {}
 
-  async canActivate(context: ExecutionContext): Promise<boolean> {
-    const req = context.switchToHttp().getRequest();
-    const header: string | undefined = req.headers['authorization'];
-    const token = header?.startsWith('Bearer ') ? header.slice(7) : undefined;
-    if (!token) {
-      throw new UnauthorizedException('Missing bearer token');
+    async canActivate(context: ExecutionContext): Promise<boolean> {
+        const req = context.switchToHttp().getRequest<AuthedRequest>();
+        const header: string | undefined = req.headers['authorization'];
+        const token = header?.startsWith('Bearer ')
+            ? header.slice(7)
+            : undefined;
+        if (!token) {
+            throw new UnauthorizedException('Missing bearer token');
+        }
+
+        const { data, error } = await this.supabase
+            .userClient(token)
+            .auth.getUser(token);
+        if (error || !data?.user) {
+            throw new UnauthorizedException('Invalid or expired token');
+        }
+
+        const { data: profile, error: profileErr } = (await this.supabase
+            .serviceClient()
+            .from('users')
+            .select('household_id, role')
+            .eq('id', data.user.id)
+            .single()) as DbResult<{ household_id: string; role: UserRole }>;
+        if (profileErr || !profile) {
+            throw new UnauthorizedException(
+                'No chore profile for this user — call bootstrap_household first',
+            );
+        }
+
+        const user: AuthUser = {
+            id: data.user.id,
+            householdId: profile.household_id,
+            role: profile.role,
+            accessToken: token,
+        };
+        req.user = user;
+        return true;
     }
-
-    const { data, error } = await this.supabase
-      .userClient(token)
-      .auth.getUser(token);
-    if (error || !data?.user) {
-      throw new UnauthorizedException('Invalid or expired token');
-    }
-
-    const { data: profile, error: profileErr } = await this.supabase
-      .serviceClient()
-      .from('users')
-      .select('household_id, role')
-      .eq('id', data.user.id)
-      .single();
-    if (profileErr || !profile) {
-      throw new UnauthorizedException(
-        'No chore profile for this user — call bootstrap_household first',
-      );
-    }
-
-    const user: AuthUser = {
-      id: data.user.id,
-      householdId: profile.household_id,
-      role: profile.role,
-      accessToken: token,
-    };
-    req.user = user;
-    return true;
-  }
 }

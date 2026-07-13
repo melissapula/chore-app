@@ -16,59 +16,60 @@
  * export, rebuild + publish, then import '@mfp-design-system/tokens/themes/playful'.
  */
 :root {
-  /* ---- Brand: grape purple ---- */
-  --color-brand-primary: #6c4ce0;
-  --color-brand-primary-hover: #5a3fc0;
-  --color-brand-primary-fg: #ffffff;
-  --color-brand-primary-subtle: #ede7ff;
-  --color-brand-primary-emphasis: #4a2fb0;
+    /* ---- Brand: grape purple ---- */
+    --color-brand-primary: #6c4ce0;
+    --color-brand-primary-hover: #5a3fc0;
+    --color-brand-primary-fg: #ffffff;
+    --color-brand-primary-subtle: #ede7ff;
+    --color-brand-primary-emphasis: #4a2fb0;
 
-  /* ---- Text: soft deep-violet instead of harsh black ---- */
-  --color-text-default: #2b2350;
-  --color-text-muted: #6b6493;
-  --color-text-inverse: #ffffff;
-  --color-text-inverse-muted: #ede7ff;
-  --color-text-brand: #5a3fc0;
+    /* ---- Text: soft deep-violet instead of harsh black ---- */
+    --color-text-default: #2b2350;
+    --color-text-muted: #6b6493;
+    --color-text-inverse: #ffffff;
+    --color-text-inverse-muted: #ede7ff;
+    --color-text-brand: #5a3fc0;
 
-  /* ---- Backgrounds: warm white with a lavender lift ---- */
-  --color-background-default: #fffdfa;
-  --color-background-subtle: #f4f0ff;
-  --color-background-muted: #e7e0ff;
+    /* ---- Backgrounds: warm white with a lavender lift ---- */
+    --color-background-default: #fffdfa;
+    --color-background-subtle: #f4f0ff;
+    --color-background-muted: #e7e0ff;
 
-  /* ---- Borders ---- */
-  --color-border-default: #e3dbff;
-  --color-border-strong: #b7a9f0;
+    /* ---- Borders ---- */
+    --color-border-default: #e3dbff;
+    --color-border-strong: #b7a9f0;
 
-  /* ---- Status: candy-bright, friendly ---- */
-  /* success = earned / on-track (grass green) */
-  --color-status-success-solid: #2fbf71;
-  --color-status-success-bg: #e5f9ef;
-  --color-status-success-border: #a8e6c6;
-  --color-status-success-fg: #1b7a47;
+    /* ---- Status: candy-bright, friendly ---- */
+    /* success = earned / on-track (grass green) */
+    --color-status-success-solid: #2fbf71;
+    --color-status-success-bg: #e5f9ef;
+    --color-status-success-border: #a8e6c6;
+    --color-status-success-fg: #1b7a47;
 
-  /* warning = timer running / running low (sunny amber) */
-  --color-status-warning-solid: #ffb020;
-  --color-status-warning-bg: #fff6e0;
-  --color-status-warning-border: #ffde9c;
-  --color-status-warning-fg: #8a5a00;
+    /* warning = timer running / running low (sunny amber) */
+    --color-status-warning-solid: #ffb020;
+    --color-status-warning-bg: #fff6e0;
+    --color-status-warning-border: #ffde9c;
+    --color-status-warning-fg: #8a5a00;
 
-  /* error = missed / rejected (friendly coral, not alarming red) */
-  --color-status-error-solid: #ff5c7a;
-  --color-status-error-bg: #ffe8ee;
-  --color-status-error-border: #ffc2cf;
-  --color-status-error-fg: #b02341;
+    /* error = missed / rejected (friendly coral, not alarming red) */
+    --color-status-error-solid: #ff5c7a;
+    --color-status-error-bg: #ffe8ee;
+    --color-status-error-border: #ffc2cf;
+    --color-status-error-fg: #b02341;
 
-  /* info = neutral notices (sky blue) */
-  --color-status-info-solid: #37b6ff;
-  --color-status-info-bg: #e4f6ff;
-  --color-status-info-border: #b3e4ff;
-  --color-status-info-fg: #0b6fa8;
+    /* info = neutral notices (sky blue) */
+    --color-status-info-solid: #37b6ff;
+    --color-status-info-bg: #e4f6ff;
+    --color-status-info-border: #b3e4ff;
+    --color-status-info-fg: #0b6fa8;
 
-  /* ---- Shape: chunky and rounded reads as friendly/tappable ---- */
-  --radius-control: 14px;
-  --radius-surface: 20px;
-  --radius-pill: 999px;
+    /* ---- Shape: chunky and rounded reads as friendly/tappable ---- */
+    --radius-control: 14px;
+    --radius-surface: 20px;
+    --radius-pill: 999px;
 
-  /* ---- Type: rounded, highly legible ---- */
-  --font-family-sans: 'Nunito', 'Baloo 2', system-ui, -apple-system, sans-serif;
+    /* ---- Type: rounded, highly legible ---- */
+    --font-family-sans:
+        'Nunito', 'Baloo 2', system-ui, -apple-system, sans-serif;
 }

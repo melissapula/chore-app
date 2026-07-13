@@ -9,15 +9,15 @@ import { ChoresModule } from './chores/chores.module';
 import { ChoreInstancesModule } from './chore-instances/chore-instances.module';
 
 @Module({
-  imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
-    ScheduleModule.forRoot(), // drives the server-authoritative timer sweep
-    SupabaseModule,
-    TimersModule,
-    ChoresModule,
-    ChoreInstancesModule,
-  ],
-  controllers: [AppController],
-  providers: [AppService],
+    imports: [
+        ConfigModule.forRoot({ isGlobal: true }),
+        ScheduleModule.forRoot(), // drives the server-authoritative timer sweep
+        SupabaseModule,
+        TimersModule,
+        ChoresModule,
+        ChoreInstancesModule,
+    ],
+    controllers: [AppController],
+    providers: [AppService],
 })
 export class AppModule {}
