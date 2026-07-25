@@ -29,6 +29,7 @@ const templates = ref<Chore[]>([]);
 const pool = ref<Instance[]>([]);
 const loading = ref(true);
 const error = ref<string | null>(null);
+const busyId = ref<string | null>(null);
 
 // new-chore form
 const title = ref('');
@@ -111,6 +112,20 @@ async function addToPool(id: string) {
     } catch (e) {
         error.value = apiMessage(e);
     }
+}
+
+// Parent actions on a live instance: approve a submission (→ APPROVED + XP), or
+// release it back to OPEN (send it back / free a stuck claim).
+async function act(id: string, action: 'approve' | 'release') {
+    error.value = null;
+    busyId.value = id;
+    try {
+        await authFetch(`/chore-instances/${id}/${action}`, { method: 'POST' });
+        await loadAll();
+    } catch (e) {
+        error.value = apiMessage(e);
+    }
+    busyId.value = null;
 }
 
 onMounted(loadAll);
@@ -209,6 +224,26 @@ onMounted(loadAll);
                     <span class="badge" :class="`s-${i.state}`">
                         {{ STATE_LABEL[i.state] || i.state }}
                     </span>
+                    <mfp-button
+                        v-if="i.state === 'SUBMITTED'"
+                        variant="primary"
+                        :disabled="busyId === i.id"
+                        @click="act(i.id, 'approve')"
+                    >
+                        Approve
+                    </mfp-button>
+                    <mfp-button
+                        v-if="
+                            ['CLAIMED', 'IN_PROGRESS', 'SUBMITTED'].includes(
+                                i.state,
+                            )
+                        "
+                        variant="ghost"
+                        :disabled="busyId === i.id"
+                        @click="act(i.id, 'release')"
+                    >
+                        {{ i.state === 'SUBMITTED' ? 'Send back' : 'Release' }}
+                    </mfp-button>
                 </li>
             </ul>
         </section>

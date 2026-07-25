@@ -138,7 +138,9 @@ Every table below carries a `household_id` for tenant isolation (enforced via Su
 | household_id | uuid fk   |                                                                                      |
 | display_name | text      |                                                                                      |
 | role         | enum      | `parent` \| `kid`                                                                    |
+| username     | text null | **kids only** — their login handle (parents sign in by email). Unique, lowercased.   |
 | avatar_emoji | text      |                                                                                      |
+| avatar_url   | text null | optional uploaded photo, stored as a data URL                                        |
 | birthdate    | date null | kids only; used **only** to power the risky-chore warning, never to gate eligibility |
 
 ### chores (templates)
@@ -340,9 +342,17 @@ At a couple dozen chores this is computationally trivial — a simple generator,
 
 ## 7. Roles & permissions (RLS)
 
-- **Parent:** create/edit chores, set timer defaults + per-chore overrides, approve/reject/release, adjust balances, view all kids' goals, settle payouts.
+- **Parent:** create/edit chores, set timer defaults + per-chore overrides, approve/reject/release, adjust balances, view all kids' goals, settle payouts. **Adds kids** and **invites co-parents** to the household.
 - **Kid:** claim / start / submit, leave & read notes, set own goals, allocate own balance. Sees only their own balance + household chore pool.
 - Enforced with Supabase Row Level Security keyed on `household_id` and `role`.
+
+**Sign-in.**
+
+- **Parents** use **email + password** (Supabase password auth — sign up, then log in). Real email → self-service password reset later.
+- **Kids** have no email, so a parent creates each kid with a **username + PIN**; the backend admin-creates the kid a Supabase Auth user whose email/password are _derived_ from those (synthesized `<username>@choreq.local` + a PIN-based password), and the kid logs in by re-typing the same username + PIN.
+- **Co-parents** join an existing household with a **single-use invite code**: an existing parent mints one (`regenerate_join_code()`), the co-parent signs up with their own email + password, then redeems the code (`join_household()`) to get a `parent` row in that household. The code is stored on the household and cleared on use.
+
+Because every user (parent, kid, co-parent) gets a real auth user, RLS (keyed on `auth.uid()`) applies uniformly. The RLS-bypassing paths are minimal and sanctioned: creating a kid runs with the **service role** (`POST /kids`), and the two onboarding RPCs (`bootstrap_household`, `join_household`) are `SECURITY DEFINER` because the caller has no `users` row yet. Everything else goes through the caller's JWT.
 
 ---
 

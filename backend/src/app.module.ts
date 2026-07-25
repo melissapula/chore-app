@@ -7,6 +7,7 @@ import { SupabaseModule } from './supabase/supabase.module';
 import { TimersModule } from './timers/timers.module';
 import { ChoresModule } from './chores/chores.module';
 import { ChoreInstancesModule } from './chore-instances/chore-instances.module';
+import { KidsModule } from './kids/kids.module';
 
 @Module({
     imports: [
@@ -16,6 +17,7 @@ import { ChoreInstancesModule } from './chore-instances/chore-instances.module';
         TimersModule,
         ChoresModule,
         ChoreInstancesModule,
+        KidsModule,
     ],
     controllers: [AppController],
     providers: [AppService],

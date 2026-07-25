@@ -26,9 +26,11 @@ const householdName = ref<string>('');
 const loading = ref(true);
 const error = ref<string | null>(null);
 
-// bootstrap form fields
+// onboarding: create a new household, or join an existing one with a code.
+const setupMode = ref<'create' | 'join'>('create');
 const formHousehold = ref('');
 const formDisplayName = ref('');
+const joinCode = ref('');
 const avatar = ref<AvatarValue | null>(null);
 const submitting = ref(false);
 const avatarPickerOpen = ref(false);
@@ -94,6 +96,40 @@ async function onBootstrap() {
     await loadProfile();
 }
 
+async function onJoin() {
+    error.value = null;
+    if (!joinCode.value.trim() || !formDisplayName.value.trim()) {
+        error.value = 'Invite code and your name are both required.';
+        return;
+    }
+    submitting.value = true;
+    const { error: err } = await supabase
+        .schema('chore')
+        .rpc('join_household', {
+            invite_code: joinCode.value.trim(),
+            display_name: formDisplayName.value.trim(),
+            avatar_emoji:
+                avatar.value?.kind === 'emoji' ? avatar.value.emoji : null,
+        });
+    if (err) {
+        submitting.value = false;
+        error.value = err.message;
+        return;
+    }
+    // Same as bootstrap: an uploaded image self-updates after the row exists.
+    if (avatar.value?.kind === 'image' && uid.value) {
+        const { error: upErr } = await supabase
+            .from('users')
+            .update({ avatar_url: avatar.value.dataUrl })
+            .eq('id', uid.value);
+        if (upErr) {
+            error.value = `Joined, but the avatar didn't save: ${upErr.message}`;
+        }
+    }
+    submitting.value = false;
+    await loadProfile();
+}
+
 async function signOut() {
     await supabase.auth.signOut();
     navigateTo('/');
@@ -136,11 +172,25 @@ onMounted(async () => {
                 Household: <strong>{{ householdName }}</strong> · Role:
                 <strong class="role">{{ profile.role }}</strong>
             </p>
-            <p class="cta">
-                <NuxtLink to="/chores">
-                    <mfp-button variant="primary">⚔️ Manage chores</mfp-button>
-                </NuxtLink>
-            </p>
+            <div class="cta">
+                <template v-if="profile.role === 'parent'">
+                    <NuxtLink to="/chores">
+                        <mfp-button variant="primary"
+                            >⚔️ Manage chores</mfp-button
+                        >
+                    </NuxtLink>
+                    <NuxtLink to="/family">
+                        <mfp-button variant="secondary">👪 Family</mfp-button>
+                    </NuxtLink>
+                </template>
+                <template v-else>
+                    <NuxtLink to="/board">
+                        <mfp-button variant="primary"
+                            >🗺️ Quest Board</mfp-button
+                        >
+                    </NuxtLink>
+                </template>
+            </div>
             <p class="signout">
                 <mfp-button variant="ghost" @click="signOut"
                     >Sign out</mfp-button
@@ -148,14 +198,45 @@ onMounted(async () => {
             </p>
         </template>
 
-        <!-- No household yet → bootstrap form -->
+        <!-- No household yet → create one, or join with an invite code -->
         <template v-else>
-            <h1>🏡 Create your household</h1>
-            <p class="muted">
-                Let's set up your family. You'll be the parent — you can add
-                kids next.
-            </p>
-            <form @submit.prevent="onBootstrap">
+            <h1>
+                {{
+                    setupMode === 'create'
+                        ? '🏡 Create your household'
+                        : '🔑 Join a household'
+                }}
+            </h1>
+
+            <div class="tabs" role="tablist">
+                <button
+                    type="button"
+                    class="tab"
+                    :class="{ active: setupMode === 'create' }"
+                    role="tab"
+                    :aria-selected="setupMode === 'create'"
+                    @click="setupMode = 'create'"
+                >
+                    Create new
+                </button>
+                <button
+                    type="button"
+                    class="tab"
+                    :class="{ active: setupMode === 'join' }"
+                    role="tab"
+                    :aria-selected="setupMode === 'join'"
+                    @click="setupMode = 'join'"
+                >
+                    Join with a code
+                </button>
+            </div>
+
+            <!-- Create a brand-new household (you become the first parent) -->
+            <form v-if="setupMode === 'create'" @submit.prevent="onBootstrap">
+                <p class="muted">
+                    Set up your family. You'll be the parent — you can add kids
+                    and invite a co-parent next.
+                </p>
                 <mfp-input
                     label="Household name"
                     name="household"
@@ -206,6 +287,62 @@ onMounted(async () => {
                 <mfp-alert v-if="error" variant="error">{{ error }}</mfp-alert>
             </form>
 
+            <!-- Join an existing household as a co-parent with an invite code -->
+            <form v-else @submit.prevent="onJoin">
+                <p class="muted">
+                    Got an invite code from another parent? Enter it to join
+                    their household.
+                </p>
+                <mfp-input
+                    label="Invite code"
+                    name="code"
+                    placeholder="A3F9C2B1"
+                    autocapitalize="characters"
+                    @input="
+                        joinCode = ($event.target as HTMLInputElement).value
+                    "
+                />
+                <mfp-input
+                    label="Your name"
+                    name="joinName"
+                    placeholder="Alex"
+                    @input="
+                        formDisplayName = ($event.target as HTMLInputElement)
+                            .value
+                    "
+                />
+                <div class="avatar-field">
+                    <span class="avatar-label">Your avatar</span>
+                    <div class="avatar-row">
+                        <span class="avatar-preview">
+                            <img
+                                v-if="avatar?.kind === 'image'"
+                                :src="avatar.dataUrl"
+                                alt="Your avatar"
+                            />
+                            <template v-else>{{
+                                avatar?.emoji || '🙂'
+                            }}</template>
+                        </span>
+                        <mfp-button
+                            type="button"
+                            variant="secondary"
+                            @click="avatarPickerOpen = true"
+                        >
+                            {{ avatar ? 'Change avatar' : 'Choose avatar' }}
+                        </mfp-button>
+                    </div>
+                </div>
+                <mfp-button
+                    type="submit"
+                    variant="primary"
+                    :disabled="submitting"
+                >
+                    {{ submitting ? 'Joining…' : 'Join household' }}
+                </mfp-button>
+                <mfp-alert v-if="error" variant="error">{{ error }}</mfp-alert>
+            </form>
+
             <AvatarPickerModal
                 v-model:open="avatarPickerOpen"
                 v-model="avatar"
@@ -243,6 +380,28 @@ h1 {
     border-radius: 50%;
     object-fit: cover;
     box-shadow: inset 0 0 0 2px var(--color-brand-primary);
+}
+.tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin: 1.25rem 0 0;
+}
+.tab {
+    flex: 1;
+    padding: 0.6rem 0.5rem;
+    border: 2px solid var(--color-surface-muted, #e6e0f5);
+    border-radius: var(--radius-md, 0.75rem);
+    background: var(--color-surface, #fff);
+    color: var(--color-text-muted);
+    font-family: var(--font-family-sans);
+    font-weight: 700;
+    font-size: 1rem;
+    cursor: pointer;
+}
+.tab.active {
+    border-color: var(--color-brand-primary, #6c4ce0);
+    background: var(--color-brand-subtle, #efe7ff);
+    color: var(--color-brand-primary, #6c4ce0);
 }
 form {
     display: flex;

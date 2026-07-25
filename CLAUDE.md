@@ -104,12 +104,20 @@ chore-app/
 
 - [x] **1. Multi-tenant spine.** households + users + auth + RLS.
       → `supabase/migrations/` holds the schema (in the `chore` schema). Apply it, expose the schema, create a test household.
+      → Parent onboards via `bootstrap_household`; parent adds kids via `POST /kids`
+      (`backend/src/kids/`, service role). Kid login = username + PIN (see
+      `backend/src/kids/kid-auth.ts`, mirrored in `frontend/app/pages/login.vue`).
+      Frontend: `/family` (parent roster + add-kid), `/board` (kid claim/start/submit).
 - [x] **2. Paid chore state machine.** templates + instances + claim→start→submit→approve.
       → `backend/src/chores/` (templates + spawn) and `backend/src/chore-instances/`
       (the state machine). Auth via `SupabaseAuthGuard`. Atomic claim (compare-and-set) + atomic approve (`approve_paid_instance()` SQL fn, migration 0003).
 - [~] **3. Server-authoritative timers.** stored deadlines + per-minute cron sweep.
   → sweep scaffolded in `backend/src/timers/`; revisit finish-timer parent-notify with step 7 push.
-- [ ] **4. Ledger + balances.**
+- [~] **4. Ledger + balances.** Earnings hit `ledger_entries` on approve
+      (`approve_paid_instance()`, migration 0003). Balances are derived (sum of
+      deltas): kid sees their **XP total + history** on `/board`; parent sees each
+      kid's XP on `/family` and can **Adjust XP** (writes a `parent_adjustment`
+      row). Still TODO for full step 4: payout/settle-up flow.
 - [ ] **5. Required chores + weekly pay gate.**
 - [ ] **6. Notes + emojis.**
 - [ ] **7. Realtime sync + web push.**
@@ -129,6 +137,7 @@ household + role). The caller must have a `chore.users` row — call the
 
 | Method + path                       | Who     | Effect                                           |
 | ----------------------------------- | ------- | ------------------------------------------------ |
+| `POST /kids`                        | parent  | Add a kid: admin-creates auth user (service role) + `chore.users` row. Username + PIN login. |
 | `POST /chores`                      | parent  | Create a chore template                          |
 | `GET /chores`                       | member  | List household templates                         |
 | `POST /chores/:id/instances`        | parent  | Spawn a paid instance (→ OPEN)                   |

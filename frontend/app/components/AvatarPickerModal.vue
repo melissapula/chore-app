@@ -160,9 +160,13 @@ function close() {
 
 <template>
     <mfp-modal :open="open" size="md" @close="close">
-        <template #header>
-            <span>Choose your avatar</span>
-        </template>
+        <!-- mfp-modal is a Lit custom element: fill its named slots with the
+             NATIVE `slot="…"` attribute, not Vue's <template #slot> (which only
+             works on Vue components and mis-compiles here). The lint rule below
+             targets Vue-component slots, so it's a false positive for a web
+             component — and its autofix would reintroduce the compiler crash. -->
+        <!-- eslint-disable-next-line vue/no-deprecated-slot-attribute -->
+        <span slot="header">Choose your avatar</span>
 
         <div class="preview">
             <div class="avatar-circle">
@@ -236,18 +240,13 @@ function close() {
             }}</mfp-alert>
         </div>
 
-        <template #footer>
-            <div class="actions">
-                <mfp-button variant="ghost" @click="close">Cancel</mfp-button>
-                <mfp-button
-                    variant="primary"
-                    :disabled="!canSave"
-                    @click="save"
-                >
-                    Save avatar
-                </mfp-button>
-            </div>
-        </template>
+        <!-- eslint-disable-next-line vue/no-deprecated-slot-attribute -->
+        <div slot="footer" class="actions">
+            <mfp-button variant="ghost" @click="close">Cancel</mfp-button>
+            <mfp-button variant="primary" :disabled="!canSave" @click="save">
+                Save avatar
+            </mfp-button>
+        </div>
     </mfp-modal>
 </template>
 
