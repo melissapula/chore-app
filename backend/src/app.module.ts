@@ -8,6 +8,7 @@ import { TimersModule } from './timers/timers.module';
 import { ChoresModule } from './chores/chores.module';
 import { ChoreInstancesModule } from './chore-instances/chore-instances.module';
 import { KidsModule } from './kids/kids.module';
+import { WeeklyGatesModule } from './weekly-gates/weekly-gates.module';
 
 @Module({
     imports: [
@@ -18,6 +19,7 @@ import { KidsModule } from './kids/kids.module';
         ChoresModule,
         ChoreInstancesModule,
         KidsModule,
+        WeeklyGatesModule,
     ],
     controllers: [AppController],
     providers: [AppService],

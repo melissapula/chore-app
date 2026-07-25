@@ -13,6 +13,7 @@ interface Instance {
     value_cents_snapshot: number;
     claimed_by: string | null;
     assigned_to: string | null;
+    gates_pay: boolean;
     start_deadline: string | null;
     finish_deadline: string | null;
     due_date: string | null;
@@ -83,6 +84,19 @@ const myRequired = computed(() =>
             ['ASSIGNED', 'SUBMITTED', 'MISSED'].includes(i.state),
     ),
 );
+
+// Pay-gating required chores this kid still owes (SPEC §3a). If any aren't
+// confirmed, their week's pay is at risk — surface a nudge.
+const gating = computed(() => {
+    const mine = pool.value.filter(
+        (i) =>
+            i.chores?.chore_type === 'required' &&
+            i.assigned_to === uid.value &&
+            i.gates_pay,
+    );
+    const done = mine.filter((i) => i.state === 'CONFIRMED').length;
+    return { total: mine.length, done };
+});
 
 function dueLabel(iso: string | null): string {
     if (!iso) return '';
@@ -192,6 +206,15 @@ onUnmounted(() => {
 
         <mfp-alert v-if="error" variant="error">{{ error }}</mfp-alert>
         <p v-if="loading" class="muted">Loading…</p>
+
+        <!-- Pay-gate nudge -->
+        <div
+            v-if="!loading && gating.total > 0 && gating.done < gating.total"
+            class="gate-nudge"
+        >
+            🔒 {{ gating.done }}/{{ gating.total }} required chores done —
+            finish them to unlock this week's pay!
+        </div>
 
         <!-- Required chores assigned to me -->
         <section v-if="!loading && myRequired.length" class="card">
@@ -482,6 +505,15 @@ h2 {
     font-size: 0.8rem;
     color: #b3261e;
     font-weight: 700;
+}
+.gate-nudge {
+    margin-bottom: 1.25rem;
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-md, 0.75rem);
+    background: #fff0cc;
+    color: #8a6400;
+    font-weight: 700;
+    font-size: 0.9rem;
 }
 .check {
     font-size: 1.3rem;

@@ -182,6 +182,11 @@ onMounted(async () => {
                     <NuxtLink to="/family">
                         <mfp-button variant="secondary">👪 Family</mfp-button>
                     </NuxtLink>
+                    <NuxtLink to="/pay">
+                        <mfp-button variant="secondary"
+                            >💵 Weekly pay</mfp-button
+                        >
+                    </NuxtLink>
                 </template>
                 <template v-else>
                     <NuxtLink to="/board">

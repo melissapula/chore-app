@@ -118,12 +118,14 @@ chore-app/
       deltas): kid sees their **XP total + history** on `/board`; parent sees each
       kid's XP on `/family` and can **Adjust XP** (writes a `parent_adjustment`
       row). Still TODO for full step 4: payout/settle-up flow.
-- [~] **5. Required chores + weekly pay gate.** Lifecycle DONE: create/assign a
+- [x] **5. Required chores + weekly pay gate.** Lifecycle: create/assign a
       required chore (parent `/chores` Required tab → ASSIGNED with a due_date),
       kid marks done on `/board` (→ SUBMITTED), parent confirms (→ CONFIRMED); the
-      cron sweep marks overdue ASSIGNED → MISSED. **TODO: the weekly pay-gate
-      engine** — end-of-week check per kid over `gates_pay` required chores →
-      populate `weekly_gates` → parent release/hold decision on paid earnings.
+      cron sweep marks overdue ASSIGNED → MISSED. Pay gate: parent `/pay` page
+      (per-kid week: earnings + required progress + Release/Hold), kid gate nudge
+      on `/board`. Gate is computed live; only the release/hold decision persists.
+      Follow-up (optional): an end-of-week cron to snapshot/finalize `weekly_gates`
+      and reflect "held" weeks in the spendable balance.
 - [ ] **6. Notes + emojis.**
 - [ ] **7. Realtime sync + web push.**
 - [ ] **8. Quests + XP.** personal reward quests (spend-to-redeem), lifetime
@@ -158,6 +160,18 @@ household + role). The caller must have a `chore.users` row — call the
 `POST /chores/:id/instances` spawns a **paid** instance (→ OPEN) or, for a
 required template, an **ASSIGNED** instance to its kid with a `due_date` from
 `due_type`. The cron sweep flips ASSIGNED past `due_date` → MISSED.
+
+Weekly pay gate (step 5, `backend/src/weekly-gates/`):
+
+| Method + path                | Who    | Effect                                              |
+| ---------------------------- | ------ | --------------------------------------------------- |
+| `GET /weekly-gates?week=…`   | member | Per-kid gate for a week (computed live from data)   |
+| `POST /weekly-gates/decide`  | parent | Record release/hold → upsert `weekly_gates` row     |
+
+The gate is computed **live** (no end-of-week cron yet): per kid, count their
+`gates_pay` required instances due that week (done = CONFIRMED) + sum that week's
+`chore_approved` ledger. Only the parent's release/hold **decision** is persisted
+(service-role upsert — `weekly_gates` has no insert RLS policy by design).
 
 ---
 
