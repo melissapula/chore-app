@@ -23,6 +23,8 @@ interface Instance {
         title: string;
         icon_emoji: string | null;
         chore_type: string;
+        est_minutes: number | null;
+        category: string | null;
     } | null;
 }
 
@@ -159,6 +161,50 @@ async function loadXp() {
     const rows = (data ?? []) as unknown as LedgerRow[];
     history.value = rows;
     myXp.value = rows.reduce((sum, r) => sum + r.delta_cents, 0);
+}
+
+// --- weekly bundle planner (SPEC §5) ---
+const planTarget = ref<number | null>(null);
+const plan = ref<BundlePlan | null>(null);
+const planBusy = ref<string | null>(null);
+const planTargetDisplay = computed(() =>
+    planTarget.value === null ? '' : String(planTarget.value),
+);
+
+function makePlan() {
+    error.value = null;
+    if (!planTarget.value || planTarget.value <= 0) {
+        error.value = 'Enter an XP goal to plan for.';
+        return;
+    }
+    const items: BundleItem[] = upForGrabs.value.map((i) => ({
+        id: i.id,
+        title: i.chores?.title ?? 'Chore',
+        icon: i.chores?.icon_emoji ?? null,
+        xp: i.value_cents_snapshot,
+        minutes: i.chores?.est_minutes ?? 0,
+        category: i.chores?.category ?? null,
+    }));
+    plan.value = makeBundles(items, planTarget.value);
+}
+
+// Claim every chore in a suggested bundle (SPEC §5: reserving = the claim flow).
+async function claimPlan(bundle: Bundle) {
+    error.value = null;
+    planBusy.value = bundle.key;
+    for (const item of bundle.items) {
+        try {
+            await authFetch(`/chore-instances/${item.id}/claim`, {
+                method: 'POST',
+            });
+        } catch {
+            // A sibling may have grabbed it — skip and keep going.
+        }
+    }
+    planBusy.value = null;
+    plan.value = null;
+    planTarget.value = null;
+    await loadPool(true);
 }
 
 async function act(
@@ -350,6 +396,72 @@ onUnmounted(() => {
                     </mfp-button>
                 </li>
             </ul>
+        </section>
+
+        <!-- Bundle planner: "I want to earn N XP — what should I do?" -->
+        <section v-if="!loading && upForGrabs.length" class="card">
+            <h2>💡 Earn toward a goal</h2>
+            <form class="plan-form" @submit.prevent="makePlan">
+                <mfp-input
+                    class="plan-in"
+                    label="I want to earn…"
+                    name="planTarget"
+                    type="number"
+                    inputmode="numeric"
+                    placeholder="200"
+                    :value.prop="planTargetDisplay"
+                    @input="
+                        planTarget =
+                            Number(($event.target as HTMLInputElement).value) ||
+                            null
+                    "
+                />
+                <mfp-button type="submit" variant="secondary"
+                    >Plan it</mfp-button
+                >
+            </form>
+
+            <p
+                v-if="plan && plan.totalAvailable < plan.target"
+                class="muted plan-note"
+            >
+                Only {{ plan.totalAvailable }} XP is up for grabs right now —
+                here's the most you can claim.
+            </p>
+
+            <div v-if="plan" class="plans">
+                <div v-for="b in plan.bundles" :key="b.key" class="plan-card">
+                    <div class="plan-head">
+                        <strong>{{ b.label }}</strong>
+                        <span class="plan-hint">{{ b.hint }}</span>
+                    </div>
+                    <ul class="plan-items">
+                        <li v-for="it in b.items" :key="it.id">
+                            <span>{{ it.icon || '📋' }} {{ it.title }}</span>
+                            <span class="plan-xp">{{ it.xp }} XP</span>
+                        </li>
+                    </ul>
+                    <div class="plan-foot">
+                        <span
+                            ><strong>{{ b.totalXp }} XP</strong>
+                            <template v-if="b.totalMinutes"
+                                >· ~{{ b.totalMinutes }} min</template
+                            ></span
+                        >
+                        <mfp-button
+                            variant="primary"
+                            :disabled="planBusy !== null"
+                            @click="claimPlan(b)"
+                        >
+                            {{
+                                planBusy === b.key
+                                    ? 'Claiming…'
+                                    : `Claim these ${b.items.length}`
+                            }}
+                        </mfp-button>
+                    </div>
+                </div>
+            </div>
         </section>
 
         <!-- Up for grabs -->
@@ -593,6 +705,66 @@ h2 {
     color: #8a6400;
     font-weight: 700;
     font-size: 0.9rem;
+}
+.plan-form {
+    display: flex;
+    gap: 0.6rem;
+    align-items: flex-end;
+}
+.plan-in {
+    flex: 1;
+}
+.plan-note {
+    margin: 0.75rem 0 0;
+    font-size: 0.85rem;
+}
+.plans {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-top: 0.75rem;
+}
+.plan-card {
+    border: 1px solid var(--color-surface-muted, #e6e0f5);
+    border-radius: var(--radius-md, 0.75rem);
+    padding: 0.75rem;
+}
+.plan-head {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    margin-bottom: 0.4rem;
+}
+.plan-hint {
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+}
+.plan-items {
+    list-style: none;
+    margin: 0 0 0.5rem;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+.plan-items li {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+}
+.plan-xp {
+    color: var(--color-brand-primary, #6c4ce0);
+    font-weight: 700;
+    white-space: nowrap;
+}
+.plan-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    border-top: 1px solid var(--color-surface-muted, #f0edf7);
+    padding-top: 0.5rem;
 }
 .check {
     font-size: 1.3rem;

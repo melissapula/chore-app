@@ -138,13 +138,15 @@ chore-app/
       SW handlers in `public/sw-push.js`, pulled into the generated PWA SW via
       `pwa.workbox.importScripts`. VAPID keys in `backend/.env` (public key served
       at `GET /push/vapid-public-key`). If keys are unset, push cleanly no-ops.
-- [~] **8. Quests + XP.** Personal spend-to-redeem quests + lifetime levels DONE
+- [x] **8. Quests + XP.** Personal spend-to-redeem quests + lifetime levels
       (migration 0009: `quests` table, `quest_redeemed` ledger reason,
       `ledger_entries.quest_id`, `redeem_quest()` RPC). Kid `/quests` page (level
       bar, spendable XP, create + track quests); parent redeems ready quests on
-      `/family` (grants IRL → negative ledger entry). Level derived client-side
-      (`~/utils/level.ts`). **TODO: the weekly bundle engine** (subset-sum over
-      currently-open chores → 3 bundles hitting an XP target).
+      `/family`. Level derived client-side (`~/utils/level.ts`). Weekly bundle
+      engine (`~/utils/bundles.ts`): kid enters a target XP on `/board` → 3
+      bundles (fewest / fastest / balanced) over the currently-OPEN pool;
+      "Claim these" runs the normal claim flow. (Instance list now joins
+      `chores.est_minutes, category`.)
 - [ ] **9. Guild quests + extras.** household XP pooling + color-coded per-kid
       contribution chart, personal-quest pace calculator, kid-initiated chore requests.
 - [ ] **10. Polish → Capacitor wrap → store compliance (COPPA, parental gate, privacy).**

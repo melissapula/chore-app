@@ -49,7 +49,9 @@ export class ChoreInstancesService {
         const db = this.supabase.userClient(user.accessToken);
         const { data, error } = (await db
             .from('chore_instances')
-            .select('*, chores(title, icon_emoji, chore_type)')
+            .select(
+                '*, chores(title, icon_emoji, chore_type, est_minutes, category)',
+            )
             .order('created_at', { ascending: false })) as DbResult<
             InstanceListRow[]
         >;

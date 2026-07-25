@@ -62,6 +62,8 @@ export interface InstanceListRow extends ChoreInstanceRow {
         title: string;
         icon_emoji: string | null;
         chore_type: string;
+        est_minutes: number | null;
+        category: string | null;
     } | null;
 }
 
