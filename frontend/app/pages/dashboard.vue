@@ -207,6 +207,11 @@ onMounted(async () => {
                             >💵 Weekly pay</mfp-button
                         >
                     </NuxtLink>
+                    <NuxtLink to="/guild">
+                        <mfp-button variant="secondary"
+                            >🛡️ Guild quest</mfp-button
+                        >
+                    </NuxtLink>
                 </template>
                 <template v-else>
                     <NuxtLink to="/board">
@@ -217,6 +222,11 @@ onMounted(async () => {
                     <NuxtLink to="/quests">
                         <mfp-button variant="secondary"
                             >🎁 My quests</mfp-button
+                        >
+                    </NuxtLink>
+                    <NuxtLink to="/guild">
+                        <mfp-button variant="secondary"
+                            >🛡️ Guild quest</mfp-button
                         >
                     </NuxtLink>
                 </template>

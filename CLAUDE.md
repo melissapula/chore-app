@@ -147,8 +147,15 @@ chore-app/
       bundles (fewest / fastest / balanced) over the currently-OPEN pool;
       "Claim these" runs the normal claim flow. (Instance list now joins
       `chores.est_minutes, category`.)
-- [ ] **9. Guild quests + extras.** household XP pooling + color-coded per-kid
-      contribution chart, personal-quest pace calculator, kid-initiated chore requests.
+- [~] **9. Guild quests + extras.** Guild quests DONE: `backend/src/guild/`
+      (`GET /guild` aggregates progress + per-kid contributions via service role —
+      kids can't read siblings' ledgers under RLS; `POST /guild` parent creates,
+      one active at a time; `POST /guild/:id/complete`). `/guild` page: family
+      goal, hero progress, **color-coded segmented contribution chart** + legend
+      (dataviz palette, per-kid stable color by join order). Reuses the `quests`
+      table (`scope='guild'`, migration 0009) — no new migration. **TODO:
+      personal-quest pace calculator; kid-initiated chore requests (`chore_requests`
+      table, SPEC §4e — needs a migration).**
 - [ ] **10. Polish → Capacitor wrap → store compliance (COPPA, parental gate, privacy).**
 
 > Ship 1–7 to our own family first. Validate the mechanic before paying the store tax.
