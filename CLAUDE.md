@@ -127,7 +127,13 @@ chore-app/
       Follow-up (optional): an end-of-week cron to snapshot/finalize `weekly_gates`
       and reflect "held" weeks in the spendable balance.
 - [ ] **6. Notes + emojis.**
-- [ ] **7. Realtime sync + web push.**
+- [~] **7. Realtime sync + web push.** Realtime DONE: `/board` (kid) and
+      `/chores` (parent) subscribe to `chore.chore_instances` (+ `ledger_entries`
+      on the board) via Supabase Realtime — instant claim/submit/approve updates,
+      RLS-scoped; a 30s poll remains only as a fallback. Migration 0007 adds those
+      tables to the `supabase_realtime` publication (**apply it** or no events
+      fire — the fallback poll still works). **TODO: web push** (VAPID keys, a
+      push-subscriptions table, `web-push` sender, notify on submit/approve/expiry).
 - [ ] **8. Quests + XP.** personal reward quests (spend-to-redeem), lifetime
       levels, weekly bundle engine (subset-sum over open chores → hit an XP target).
 - [ ] **9. Guild quests + extras.** household XP pooling + color-coded per-kid

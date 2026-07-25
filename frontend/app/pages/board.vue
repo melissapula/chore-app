@@ -2,8 +2,10 @@
 // The kid's Quest Board (SPEC §2 paid flow, kid side): claim an OPEN chore, then
 // start → submit the ones you've claimed. Timers are SERVER-authoritative stored
 // deadlines — we only render `deadline − now`, ticking a local clock each second.
-// The pool is polled every few seconds so a sibling's claim shows up (realtime
-// sync is build step 7).
+// The pool + XP update live via Supabase Realtime (build step 7); a slow poll is
+// kept only as a safety net if the realtime socket drops.
+import type { RealtimeChannel } from '@supabase/supabase-js';
+
 const supabase = useSupabaseClient();
 const { authFetch } = useApi();
 
@@ -54,6 +56,7 @@ const now = ref<number>(0);
 
 let clock: ReturnType<typeof setInterval> | null = null;
 let poller: ReturnType<typeof setInterval> | null = null;
+let channel: RealtimeChannel | null = null;
 
 // OPEN paid chores anyone in the household can grab.
 const upForGrabs = computed(() =>
@@ -178,17 +181,35 @@ onMounted(async () => {
     clock = setInterval(() => {
         now.value = Date.now();
     }, 1000);
-    // Re-poll the pool AND the XP total, so an approval by a parent shows up
-    // (both the chore moving to Done and the XP going up).
+
+    // Live updates: any change to the household's instances refreshes the pool;
+    // a new ledger row refreshes XP. RLS scopes what we receive. The cron sweep
+    // (expired claims → OPEN, overdue required → MISSED) broadcasts here too.
+    channel = supabase
+        .channel('board')
+        .on(
+            'postgres_changes',
+            { event: '*', schema: 'chore', table: 'chore_instances' },
+            () => void loadPool(true),
+        )
+        .on(
+            'postgres_changes',
+            { event: '*', schema: 'chore', table: 'ledger_entries' },
+            () => void loadXp(),
+        )
+        .subscribe();
+
+    // Safety net only — if the realtime socket drops, we still reconcile slowly.
     poller = setInterval(() => {
         void loadPool(true);
         void loadXp();
-    }, 5000);
+    }, 30000);
 });
 
 onUnmounted(() => {
     if (clock) clearInterval(clock);
     if (poller) clearInterval(poller);
+    if (channel) void supabase.removeChannel(channel);
 });
 </script>
 

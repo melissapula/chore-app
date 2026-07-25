@@ -3,6 +3,8 @@
 //   • Paid (SPEC §2)     — gamified template + spawn into the claimable pool.
 //   • Required (SPEC §3a) — assigned to one kid, has a due date, no race/timer;
 //     kid marks done → parent confirms. Can gate the week's pay.
+import type { RealtimeChannel } from '@supabase/supabase-js';
+
 const { authFetch } = useApi();
 const supabase = useSupabaseClient();
 
@@ -95,8 +97,8 @@ function apiMessage(e: unknown): string {
     return err?.data?.message || err?.message || 'Something went wrong';
 }
 
-async function loadAll() {
-    loading.value = true;
+async function loadAll(silent = false) {
+    if (!silent) loading.value = true;
     error.value = null;
     try {
         const [t, p] = await Promise.all([
@@ -108,7 +110,7 @@ async function loadAll() {
     } catch (e) {
         error.value = apiMessage(e);
     }
-    loading.value = false;
+    if (!silent) loading.value = false;
 }
 
 async function loadKids() {
@@ -189,8 +191,24 @@ async function act(id: string, action: 'approve' | 'confirm' | 'release') {
     busyId.value = null;
 }
 
+let channel: RealtimeChannel | null = null;
+
 onMounted(async () => {
     await Promise.all([loadAll(), loadKids()]);
+    // Live pool: reflect kids claiming / starting / submitting as it happens,
+    // plus cron-driven changes. RLS scopes it to this household.
+    channel = supabase
+        .channel('chores-pool')
+        .on(
+            'postgres_changes',
+            { event: '*', schema: 'chore', table: 'chore_instances' },
+            () => void loadAll(true),
+        )
+        .subscribe();
+});
+
+onUnmounted(() => {
+    if (channel) void supabase.removeChannel(channel);
 });
 </script>
 
