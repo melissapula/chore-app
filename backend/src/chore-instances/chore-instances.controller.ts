@@ -62,4 +62,22 @@ export class ChoreInstancesController {
     ) {
         return this.instances.release(user, id);
     }
+
+    // --- required-chore flow ---
+
+    @Post(':id/mark-done')
+    markDone(
+        @CurrentUser() user: AuthUser,
+        @Param('id', ParseUUIDPipe) id: string,
+    ) {
+        return this.instances.markDone(user, id);
+    }
+
+    @Post(':id/confirm')
+    confirm(
+        @CurrentUser() user: AuthUser,
+        @Param('id', ParseUUIDPipe) id: string,
+    ) {
+        return this.instances.confirm(user, id);
+    }
 }

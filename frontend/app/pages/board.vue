@@ -12,8 +12,10 @@ interface Instance {
     state: string;
     value_cents_snapshot: number;
     claimed_by: string | null;
+    assigned_to: string | null;
     start_deadline: string | null;
     finish_deadline: string | null;
+    due_date: string | null;
     chores: {
         title: string;
         icon_emoji: string | null;
@@ -72,6 +74,23 @@ const myDone = computed(() =>
         (i) => i.claimed_by === uid.value && i.state === 'APPROVED',
     ),
 );
+// Required chores assigned to this kid that still need attention or just resolved.
+const myRequired = computed(() =>
+    pool.value.filter(
+        (i) =>
+            i.chores?.chore_type === 'required' &&
+            i.assigned_to === uid.value &&
+            ['ASSIGNED', 'SUBMITTED', 'MISSED'].includes(i.state),
+    ),
+);
+
+function dueLabel(iso: string | null): string {
+    if (!iso) return '';
+    const d = new Date(iso);
+    const today = new Date();
+    const sameDay = d.toDateString() === today.toDateString();
+    return sameDay ? 'Due today' : `Due ${d.toLocaleDateString()}`;
+}
 
 function apiMessage(e: unknown): string {
     const err = e as { data?: { message?: string }; message?: string };
@@ -117,7 +136,10 @@ async function loadXp() {
     myXp.value = rows.reduce((sum, r) => sum + r.delta_cents, 0);
 }
 
-async function act(id: string, action: 'claim' | 'start' | 'submit') {
+async function act(
+    id: string,
+    action: 'claim' | 'start' | 'submit' | 'mark-done',
+) {
     error.value = null;
     busyId.value = id;
     try {
@@ -170,6 +192,50 @@ onUnmounted(() => {
 
         <mfp-alert v-if="error" variant="error">{{ error }}</mfp-alert>
         <p v-if="loading" class="muted">Loading…</p>
+
+        <!-- Required chores assigned to me -->
+        <section v-if="!loading && myRequired.length" class="card">
+            <h2>📋 My chores</h2>
+            <ul class="list">
+                <li
+                    v-for="i in myRequired"
+                    :key="i.id"
+                    class="item"
+                    :class="{ done: i.state === 'MISSED' }"
+                >
+                    <span class="icon">{{ i.chores?.icon_emoji || '📋' }}</span>
+                    <span class="grow">
+                        <strong>{{ i.chores?.title || 'Chore' }}</strong>
+                        <span
+                            v-if="i.state === 'ASSIGNED'"
+                            class="timer"
+                            :class="{
+                                over:
+                                    !!i.due_date &&
+                                    new Date(i.due_date).getTime() < now,
+                            }"
+                        >
+                            ⏰ {{ dueLabel(i.due_date) }}
+                        </span>
+                        <span
+                            v-else-if="i.state === 'SUBMITTED'"
+                            class="pending"
+                        >
+                            ✅ Done — waiting for a grown-up
+                        </span>
+                        <span v-else class="missed-tag">😬 Missed</span>
+                    </span>
+                    <mfp-button
+                        v-if="i.state === 'ASSIGNED'"
+                        variant="primary"
+                        :disabled="busyId === i.id"
+                        @click="act(i.id, 'mark-done')"
+                    >
+                        Mark done
+                    </mfp-button>
+                </li>
+            </ul>
+        </section>
 
         <!-- My active quests -->
         <section v-if="!loading && myQuests.length" class="card">
@@ -410,6 +476,11 @@ h2 {
 .pending {
     font-size: 0.8rem;
     color: var(--color-text-muted);
+    font-weight: 700;
+}
+.missed-tag {
+    font-size: 0.8rem;
+    color: #b3261e;
     font-weight: 700;
 }
 .check {

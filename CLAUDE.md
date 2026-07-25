@@ -118,7 +118,12 @@ chore-app/
       deltas): kid sees their **XP total + history** on `/board`; parent sees each
       kid's XP on `/family` and can **Adjust XP** (writes a `parent_adjustment`
       row). Still TODO for full step 4: payout/settle-up flow.
-- [ ] **5. Required chores + weekly pay gate.**
+- [~] **5. Required chores + weekly pay gate.** Lifecycle DONE: create/assign a
+      required chore (parent `/chores` Required tab → ASSIGNED with a due_date),
+      kid marks done on `/board` (→ SUBMITTED), parent confirms (→ CONFIRMED); the
+      cron sweep marks overdue ASSIGNED → MISSED. **TODO: the weekly pay-gate
+      engine** — end-of-week check per kid over `gates_pay` required chores →
+      populate `weekly_gates` → parent release/hold decision on paid earnings.
 - [ ] **6. Notes + emojis.**
 - [ ] **7. Realtime sync + web push.**
 - [ ] **8. Quests + XP.** personal reward quests (spend-to-redeem), lifetime
@@ -147,6 +152,12 @@ household + role). The caller must have a `chore.users` row — call the
 | `POST /chore-instances/:id/submit`  | claimer | IN_PROGRESS → SUBMITTED                          |
 | `POST /chore-instances/:id/approve` | parent  | SUBMITTED → APPROVED + ledger credit (atomic)    |
 | `POST /chore-instances/:id/release` | parent  | CLAIMED/IN_PROGRESS/SUBMITTED → OPEN             |
+| `POST /chore-instances/:id/mark-done` | kid   | ASSIGNED → SUBMITTED (required; the assigned kid) |
+| `POST /chore-instances/:id/confirm` | parent  | SUBMITTED → CONFIRMED (required; no ledger)      |
+
+`POST /chores/:id/instances` spawns a **paid** instance (→ OPEN) or, for a
+required template, an **ASSIGNED** instance to its kid with a `due_date` from
+`due_type`. The cron sweep flips ASSIGNED past `due_date` → MISSED.
 
 ---
 

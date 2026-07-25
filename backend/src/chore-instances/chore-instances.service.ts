@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { SupabaseService } from '../supabase/supabase.service';
 import { AuthUser } from '../auth/auth-user.interface';
-import { PaidState, RELEASABLE_STATES } from './instance-state';
+import { PaidState, RELEASABLE_STATES, RequiredState } from './instance-state';
 import {
     ChoreInstanceRow,
     ClaimSelect,
@@ -243,6 +243,101 @@ export class ChoreInstancesService {
                 'Instance is not in a releasable state (CLAIMED / IN_PROGRESS / SUBMITTED)',
             );
         }
+        return updated;
+    }
+
+    // --- required-chore flow (SPEC §3a): ASSIGNED → SUBMITTED → CONFIRMED ---
+
+    /** ASSIGNED → SUBMITTED. Only the assigned kid; no timers. */
+    async markDone(user: AuthUser, id: string) {
+        const db = this.supabase.userClient(user.accessToken);
+
+        const { data: inst, error } = (await db
+            .from('chore_instances')
+            .select('id, state, assigned_to, chores(chore_type)')
+            .eq('id', id)
+            .maybeSingle()) as DbResult<{
+            id: string;
+            state: string;
+            assigned_to: string | null;
+            chores: { chore_type: string };
+        }>;
+        if (error) throw new BadRequestException(error.message);
+        if (!inst) throw new NotFoundException('Instance not found');
+        if (inst.chores.chore_type !== 'required') {
+            throw new BadRequestException('Not a required chore');
+        }
+        if (inst.state !== RequiredState.ASSIGNED) {
+            throw new ConflictException(
+                `Instance is ${inst.state}, not ASSIGNED`,
+            );
+        }
+        if (inst.assigned_to !== user.id) {
+            throw new ForbiddenException(
+                'This chore is assigned to someone else',
+            );
+        }
+
+        const { data: updated, error: updErr } = (await db
+            .from('chore_instances')
+            .update({
+                state: RequiredState.SUBMITTED,
+                submitted_at: new Date().toISOString(),
+            })
+            .eq('id', id)
+            .eq('state', RequiredState.ASSIGNED)
+            .eq('assigned_to', user.id)
+            .select()
+            .maybeSingle()) as DbResult<ChoreInstanceRow>;
+        if (updErr) throw new BadRequestException(updErr.message);
+        if (!updated)
+            throw new ConflictException('Could not mark this chore done');
+        return updated;
+    }
+
+    /** SUBMITTED → CONFIRMED (parent). No ledger credit — required chores are $0. */
+    async confirm(user: AuthUser, id: string) {
+        if (user.role !== 'parent') {
+            throw new ForbiddenException('Only a parent can confirm a chore');
+        }
+        const db = this.supabase.userClient(user.accessToken);
+
+        const { data: inst, error } = (await db
+            .from('chore_instances')
+            .select('id, state, chores(chore_type)')
+            .eq('id', id)
+            .maybeSingle()) as DbResult<{
+            id: string;
+            state: string;
+            chores: { chore_type: string };
+        }>;
+        if (error) throw new BadRequestException(error.message);
+        if (!inst) throw new NotFoundException('Instance not found');
+        if (inst.chores.chore_type !== 'required') {
+            throw new BadRequestException(
+                'Use approve for paid chores; confirm is for required chores',
+            );
+        }
+        if (inst.state !== RequiredState.SUBMITTED) {
+            throw new ConflictException(
+                `Instance is ${inst.state}, not SUBMITTED`,
+            );
+        }
+
+        const { data: updated, error: updErr } = (await db
+            .from('chore_instances')
+            .update({
+                state: RequiredState.CONFIRMED,
+                approved_at: new Date().toISOString(),
+                approved_by: user.id,
+            })
+            .eq('id', id)
+            .eq('state', RequiredState.SUBMITTED)
+            .select()
+            .maybeSingle()) as DbResult<ChoreInstanceRow>;
+        if (updErr) throw new BadRequestException(updErr.message);
+        if (!updated)
+            throw new ConflictException('Could not confirm this chore');
         return updated;
     }
 }

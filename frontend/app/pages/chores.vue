@@ -1,8 +1,10 @@
 <script setup lang="ts">
-// Parent view for the paid-chore flow (build step 2, now on the frontend):
-// create a chore template, spawn it into the live pool, and watch the pool.
-// Claiming/approving arrive once the household has kids (next step).
+// Parent view for both chore flows:
+//   • Paid (SPEC §2)     — gamified template + spawn into the claimable pool.
+//   • Required (SPEC §3a) — assigned to one kid, has a due date, no race/timer;
+//     kid marks done → parent confirms. Can gate the week's pay.
 const { authFetch } = useApi();
+const supabase = useSupabaseClient();
 
 interface Chore {
     id: string;
@@ -10,6 +12,9 @@ interface Chore {
     icon_emoji: string | null;
     chore_type: 'paid' | 'required';
     value_cents: number;
+    assigned_kid_id: string | null;
+    due_type: string | null;
+    gates_pay: boolean;
     active: boolean;
 }
 
@@ -18,6 +23,9 @@ interface Instance {
     state: string;
     value_cents_snapshot: number;
     claimed_by: string | null;
+    assigned_to: string | null;
+    due_date: string | null;
+    gates_pay: boolean;
     chores: {
         title: string;
         icon_emoji: string | null;
@@ -25,26 +33,50 @@ interface Instance {
     } | null;
 }
 
+interface Kid {
+    id: string;
+    display_name: string;
+}
+
 const templates = ref<Chore[]>([]);
 const pool = ref<Instance[]>([]);
+const kids = ref<Kid[]>([]);
 const loading = ref(true);
 const error = ref<string | null>(null);
 const busyId = ref<string | null>(null);
 
 // new-chore form
+const choreType = ref<'paid' | 'required'>('paid');
 const title = ref('');
 const emoji = ref('');
 const xp = ref<number | null>(null);
+const assignedKid = ref('');
+const dueType = ref<'end_of_day' | 'end_of_week'>('end_of_day');
+const gatesPay = ref(false);
 const creating = ref(false);
 
 // mfp-input wants a string value; render the numeric XP (or empty) for binding.
 const xpDisplay = computed(() => (xp.value === null ? '' : String(xp.value)));
 
-// Fill the form from a picked preset (common gamified chore, or a custom one).
+function kidName(id: string | null): string {
+    if (!id) return 'a kid';
+    return kids.value.find((k) => k.id === id)?.display_name ?? 'a kid';
+}
+
+// Fill the paid form from a picked preset (gamified chore, or a custom one).
 function onPreset(p: { title: string; emoji: string; xp: number }) {
     title.value = p.title;
     emoji.value = p.emoji || '';
     xp.value = p.xp || null;
+}
+
+function switchType(t: 'paid' | 'required') {
+    choreType.value = t;
+    // Reset shared fields so a paid preset doesn't bleed into a required chore.
+    title.value = '';
+    emoji.value = '';
+    xp.value = null;
+    error.value = null;
 }
 
 const STATE_LABEL: Record<string, string> = {
@@ -53,6 +85,9 @@ const STATE_LABEL: Record<string, string> = {
     IN_PROGRESS: 'In progress',
     SUBMITTED: 'Submitted',
     APPROVED: 'Approved',
+    ASSIGNED: 'Assigned',
+    CONFIRMED: 'Confirmed',
+    MISSED: 'Missed',
 };
 
 function apiMessage(e: unknown): string {
@@ -76,27 +111,48 @@ async function loadAll() {
     loading.value = false;
 }
 
+async function loadKids() {
+    const { data } = await supabase
+        .from('users')
+        .select('id, display_name, role')
+        .eq('role', 'kid');
+    kids.value = (data ?? []) as Kid[];
+}
+
 async function createChore() {
     error.value = null;
     if (!title.value.trim()) {
         error.value = 'Give your chore a name.';
         return;
     }
+    if (choreType.value === 'required' && !assignedKid.value) {
+        error.value = 'Pick which kid this required chore is for.';
+        return;
+    }
     creating.value = true;
     try {
-        await authFetch<Chore>('/chores', {
-            method: 'POST',
-            body: {
-                title: title.value.trim(),
-                chore_type: 'paid',
-                icon_emoji: emoji.value.trim() || undefined,
-                value_cents:
-                    xp.value && xp.value > 0 ? Math.round(xp.value) : 0,
-            },
-        });
+        const body =
+            choreType.value === 'paid'
+                ? {
+                      title: title.value.trim(),
+                      chore_type: 'paid' as const,
+                      icon_emoji: emoji.value.trim() || undefined,
+                      value_cents:
+                          xp.value && xp.value > 0 ? Math.round(xp.value) : 0,
+                  }
+                : {
+                      title: title.value.trim(),
+                      chore_type: 'required' as const,
+                      icon_emoji: emoji.value.trim() || undefined,
+                      assigned_kid_id: assignedKid.value,
+                      due_type: dueType.value,
+                      gates_pay: gatesPay.value,
+                  };
+        await authFetch<Chore>('/chores', { method: 'POST', body });
         title.value = '';
         emoji.value = '';
         xp.value = null;
+        gatesPay.value = false;
         await loadAll();
     } catch (e) {
         error.value = apiMessage(e);
@@ -104,19 +160,24 @@ async function createChore() {
     creating.value = false;
 }
 
+// Spawn a live instance: paid → OPEN pool; required → ASSIGNED to its kid.
 async function addToPool(id: string) {
     error.value = null;
+    busyId.value = id;
     try {
         await authFetch(`/chores/${id}/instances`, { method: 'POST' });
         await loadAll();
     } catch (e) {
         error.value = apiMessage(e);
     }
+    busyId.value = null;
 }
 
-// Parent actions on a live instance: approve a submission (→ APPROVED + XP), or
-// release it back to OPEN (send it back / free a stuck claim).
-async function act(id: string, action: 'approve' | 'release') {
+// Parent actions on a live instance.
+//   approve  — paid SUBMITTED → APPROVED (+ XP)
+//   confirm  — required SUBMITTED → CONFIRMED
+//   release  — paid → OPEN (send back / free a stuck claim)
+async function act(id: string, action: 'approve' | 'confirm' | 'release') {
     error.value = null;
     busyId.value = id;
     try {
@@ -128,7 +189,9 @@ async function act(id: string, action: 'approve' | 'release') {
     busyId.value = null;
 }
 
-onMounted(loadAll);
+onMounted(async () => {
+    await Promise.all([loadAll(), loadKids()]);
+});
 </script>
 
 <template>
@@ -141,39 +204,124 @@ onMounted(loadAll);
         <!-- Create -->
         <section class="card">
             <h2>New chore</h2>
+
+            <div class="tabs" role="tablist">
+                <button
+                    type="button"
+                    class="tab"
+                    :class="{ active: choreType === 'paid' }"
+                    role="tab"
+                    :aria-selected="choreType === 'paid'"
+                    @click="switchType('paid')"
+                >
+                    💰 Paid
+                </button>
+                <button
+                    type="button"
+                    class="tab"
+                    :class="{ active: choreType === 'required' }"
+                    role="tab"
+                    :aria-selected="choreType === 'required'"
+                    @click="switchType('required')"
+                >
+                    📌 Required
+                </button>
+            </div>
+
             <form @submit.prevent="createChore">
-                <ChorePicker @select="onPreset" />
+                <!-- PAID: gamified picker + XP -->
+                <template v-if="choreType === 'paid'">
+                    <ChorePicker @select="onPreset" />
 
-                <div v-if="title" class="chosen">
-                    <span class="chosen-emoji">{{ emoji || '📋' }}</span>
-                    <strong>{{ title }}</strong>
-                </div>
+                    <div v-if="title" class="chosen">
+                        <span class="chosen-emoji">{{ emoji || '📋' }}</span>
+                        <strong>{{ title }}</strong>
+                    </div>
 
-                <div v-if="title" class="row">
+                    <div v-if="title" class="row">
+                        <mfp-input
+                            class="emoji-in"
+                            label="Icon"
+                            name="emoji"
+                            :value.prop="emoji"
+                            @input="
+                                emoji = ($event.target as HTMLInputElement)
+                                    .value
+                            "
+                        />
+                        <mfp-input
+                            class="xp-in"
+                            label="XP reward"
+                            name="xp"
+                            type="number"
+                            inputmode="numeric"
+                            :value.prop="xpDisplay"
+                            @input="
+                                xp =
+                                    Number(
+                                        ($event.target as HTMLInputElement)
+                                            .value,
+                                    ) || null
+                            "
+                        />
+                    </div>
+                </template>
+
+                <!-- REQUIRED: name + assignee + due + pay gate -->
+                <template v-else>
                     <mfp-input
-                        class="emoji-in"
-                        label="Icon"
-                        name="emoji"
-                        :value.prop="emoji"
+                        label="Chore name"
+                        name="reqTitle"
+                        placeholder="Make your bed"
+                        :value.prop="title"
                         @input="
-                            emoji = ($event.target as HTMLInputElement).value
+                            title = ($event.target as HTMLInputElement).value
                         "
                     />
-                    <mfp-input
-                        class="xp-in"
-                        label="XP reward"
-                        name="xp"
-                        type="number"
-                        inputmode="numeric"
-                        :value.prop="xpDisplay"
-                        @input="
-                            xp =
-                                Number(
-                                    ($event.target as HTMLInputElement).value,
-                                ) || null
-                        "
-                    />
-                </div>
+                    <div class="row">
+                        <mfp-input
+                            class="emoji-in"
+                            label="Icon"
+                            name="reqEmoji"
+                            :value.prop="emoji"
+                            @input="
+                                emoji = ($event.target as HTMLInputElement)
+                                    .value
+                            "
+                        />
+                        <label class="field grow-field">
+                            <span class="field-label">Assign to</span>
+                            <select v-model="assignedKid" class="select">
+                                <option value="" disabled>Pick a kid…</option>
+                                <option
+                                    v-for="k in kids"
+                                    :key="k.id"
+                                    :value="k.id"
+                                >
+                                    {{ k.display_name }}
+                                </option>
+                            </select>
+                        </label>
+                    </div>
+                    <label class="field">
+                        <span class="field-label">Due</span>
+                        <select v-model="dueType" class="select">
+                            <option value="end_of_day">End of day</option>
+                            <option value="end_of_week">End of week</option>
+                        </select>
+                    </label>
+                    <label class="check-field">
+                        <input v-model="gatesPay" type="checkbox" />
+                        <span
+                            >Gates pay — if missed, holds this week's earnings
+                            for review</span
+                        >
+                    </label>
+                    <p v-if="!kids.length" class="muted small">
+                        Add a kid on the Family page first — required chores are
+                        assigned to a specific kid.
+                    </p>
+                </template>
 
                 <mfp-button
                     type="submit"
@@ -198,51 +346,91 @@ onMounted(loadAll);
                     <span class="icon">{{ c.icon_emoji || '📋' }}</span>
                     <span class="grow">
                         <strong>{{ c.title }}</strong>
-                        <span class="xp">{{ c.value_cents }} XP</span>
+                        <span v-if="c.chore_type === 'paid'" class="xp"
+                            >{{ c.value_cents }} XP</span
+                        >
+                        <span v-else class="req-sub">
+                            Required · for {{ kidName(c.assigned_kid_id)
+                            }}<template v-if="c.gates_pay">
+                                · 🔒 gates pay</template
+                            >
+                        </span>
                     </span>
-                    <mfp-button variant="secondary" @click="addToPool(c.id)">
-                        Add to pool
+                    <mfp-button
+                        variant="secondary"
+                        :disabled="busyId === c.id"
+                        @click="addToPool(c.id)"
+                    >
+                        {{ c.chore_type === 'paid' ? 'Add to pool' : 'Assign' }}
                     </mfp-button>
                 </li>
             </ul>
         </section>
 
-        <!-- Pool -->
+        <!-- Live instances -->
         <section v-if="!loading" class="card">
-            <h2>The pool</h2>
+            <h2>Live chores</h2>
             <p v-if="!pool.length" class="muted">
-                Nothing in the pool yet. Add a chore to the pool for the kids to
-                claim.
+                Nothing live yet. Add a paid chore to the pool, or assign a
+                required one.
             </p>
             <ul v-else class="list">
                 <li v-for="i in pool" :key="i.id" class="item">
                     <span class="icon">{{ i.chores?.icon_emoji || '📋' }}</span>
                     <span class="grow">
                         <strong>{{ i.chores?.title || 'Chore' }}</strong>
-                        <span class="xp">{{ i.value_cents_snapshot }} XP</span>
+                        <span
+                            v-if="i.chores?.chore_type === 'required'"
+                            class="req-sub"
+                        >
+                            for {{ kidName(i.assigned_to) }}
+                        </span>
+                        <span v-else class="xp"
+                            >{{ i.value_cents_snapshot }} XP</span
+                        >
                     </span>
                     <span class="badge" :class="`s-${i.state}`">
                         {{ STATE_LABEL[i.state] || i.state }}
                     </span>
+
+                    <!-- Paid: approve / release -->
+                    <template v-if="i.chores?.chore_type !== 'required'">
+                        <mfp-button
+                            v-if="i.state === 'SUBMITTED'"
+                            variant="primary"
+                            :disabled="busyId === i.id"
+                            @click="act(i.id, 'approve')"
+                        >
+                            Approve
+                        </mfp-button>
+                        <mfp-button
+                            v-if="
+                                [
+                                    'CLAIMED',
+                                    'IN_PROGRESS',
+                                    'SUBMITTED',
+                                ].includes(i.state)
+                            "
+                            variant="ghost"
+                            :disabled="busyId === i.id"
+                            @click="act(i.id, 'release')"
+                        >
+                            {{
+                                i.state === 'SUBMITTED'
+                                    ? 'Send back'
+                                    : 'Release'
+                            }}
+                        </mfp-button>
+                    </template>
+
+                    <!-- Required: confirm -->
                     <mfp-button
-                        v-if="i.state === 'SUBMITTED'"
+                        v-else-if="i.state === 'SUBMITTED'"
                         variant="primary"
                         :disabled="busyId === i.id"
-                        @click="act(i.id, 'approve')"
+                        @click="act(i.id, 'confirm')"
                     >
-                        Approve
-                    </mfp-button>
-                    <mfp-button
-                        v-if="
-                            ['CLAIMED', 'IN_PROGRESS', 'SUBMITTED'].includes(
-                                i.state,
-                            )
-                        "
-                        variant="ghost"
-                        :disabled="busyId === i.id"
-                        @click="act(i.id, 'release')"
-                    >
-                        {{ i.state === 'SUBMITTED' ? 'Send back' : 'Release' }}
+                        Confirm
                     </mfp-button>
                 </li>
             </ul>
@@ -274,12 +462,36 @@ h2 {
 .muted {
     color: var(--color-text-muted);
 }
+.small {
+    font-size: 0.8rem;
+}
 .card {
     background: var(--color-surface, #fff);
     border: 1px solid var(--color-surface-muted, #eee);
     border-radius: var(--radius-lg, 1rem);
     padding: 1rem;
     margin-bottom: 1.25rem;
+}
+.tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin: 0 0 1rem;
+}
+.tab {
+    flex: 1;
+    padding: 0.5rem;
+    border: 2px solid var(--color-surface-muted, #e6e0f5);
+    border-radius: var(--radius-md, 0.75rem);
+    background: var(--color-surface, #fff);
+    color: var(--color-text-muted);
+    font-family: var(--font-family-sans);
+    font-weight: 700;
+    cursor: pointer;
+}
+.tab.active {
+    border-color: var(--color-brand-primary, #6c4ce0);
+    background: var(--color-brand-subtle, #efe7ff);
+    color: var(--color-brand-primary, #6c4ce0);
 }
 form {
     display: flex;
@@ -289,6 +501,36 @@ form {
 .row {
     display: flex;
     gap: 0.75rem;
+}
+.field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+.grow-field {
+    flex: 1;
+}
+.field-label {
+    font-weight: 700;
+    font-size: 0.9rem;
+}
+.select {
+    padding: 0.6rem 0.5rem;
+    border: 2px solid var(--color-surface-muted, #e6e0f5);
+    border-radius: var(--radius-md, 0.75rem);
+    background: var(--color-surface, #fff);
+    font: inherit;
+    color: var(--color-text-default);
+}
+.check-field {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    line-height: 1.3;
+}
+.check-field input {
+    margin-top: 0.15rem;
 }
 .chosen {
     display: flex;
@@ -338,6 +580,10 @@ form {
     color: var(--color-brand-primary, #6c4ce0);
     font-weight: 700;
 }
+.req-sub {
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+}
 .badge {
     font-size: 0.75rem;
     font-weight: 700;
@@ -363,8 +609,17 @@ form {
     background: #ffe2cc;
     color: #a5510a;
 }
-.s-APPROVED {
+.s-APPROVED,
+.s-CONFIRMED {
     background: #d6f5d6;
     color: #1f7a34;
+}
+.s-ASSIGNED {
+    background: #e6e0f5;
+    color: #4a3aa8;
+}
+.s-MISSED {
+    background: #ffd6d6;
+    color: #b3261e;
 }
 </style>
