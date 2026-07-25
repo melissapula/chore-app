@@ -8,6 +8,7 @@
 import type { AvatarValue } from '~/types/avatar';
 
 const supabase = useSupabaseClient();
+const { supported: pushSupported, enable: enablePush } = usePush();
 
 interface Profile {
     id: string;
@@ -130,6 +131,24 @@ async function onJoin() {
     await loadProfile();
 }
 
+// Web push opt-in (shown once we've confirmed the device supports it).
+const pushOk = ref(false);
+const pushBusy = ref(false);
+const pushDone = ref(false);
+const pushMsg = ref<string | null>(null);
+
+async function onEnablePush() {
+    pushMsg.value = null;
+    pushBusy.value = true;
+    try {
+        await enablePush();
+        pushDone.value = true;
+    } catch (e) {
+        pushMsg.value = (e as Error).message;
+    }
+    pushBusy.value = false;
+}
+
 async function signOut() {
     await supabase.auth.signOut();
     navigateTo('/');
@@ -146,6 +165,7 @@ onMounted(async () => {
         return;
     }
     uid.value = data.user.id;
+    pushOk.value = pushSupported();
     await loadProfile();
 });
 </script>
@@ -196,6 +216,22 @@ onMounted(async () => {
                     </NuxtLink>
                 </template>
             </div>
+            <p v-if="pushOk" class="pushrow">
+                <mfp-button
+                    variant="ghost"
+                    :disabled="pushBusy || pushDone"
+                    @click="onEnablePush"
+                >
+                    {{
+                        pushDone
+                            ? '🔔 Notifications on ✓'
+                            : pushBusy
+                              ? 'Enabling…'
+                              : '🔔 Enable notifications'
+                    }}
+                </mfp-button>
+                <span v-if="pushMsg" class="pushmsg">{{ pushMsg }}</span>
+            </p>
             <p class="signout">
                 <mfp-button variant="ghost" @click="signOut"
                     >Sign out</mfp-button
@@ -445,7 +481,18 @@ form {
     height: 100%;
     object-fit: cover;
 }
-.signout {
+.pushrow {
     margin-top: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    align-items: flex-start;
+}
+.pushmsg {
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+}
+.signout {
+    margin-top: 0.5rem;
 }
 </style>

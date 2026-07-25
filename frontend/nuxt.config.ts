@@ -72,6 +72,8 @@ export default defineNuxtConfig({
         },
         workbox: {
             navigateFallback: '/',
+            // Pull our push / notificationclick handlers into the generated SW.
+            importScripts: ['/sw-push.js'],
         },
         devOptions: {
             enabled: true,

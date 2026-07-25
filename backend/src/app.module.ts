@@ -9,6 +9,7 @@ import { ChoresModule } from './chores/chores.module';
 import { ChoreInstancesModule } from './chore-instances/chore-instances.module';
 import { KidsModule } from './kids/kids.module';
 import { WeeklyGatesModule } from './weekly-gates/weekly-gates.module';
+import { PushModule } from './push/push.module';
 
 @Module({
     imports: [
@@ -20,6 +21,7 @@ import { WeeklyGatesModule } from './weekly-gates/weekly-gates.module';
         ChoreInstancesModule,
         KidsModule,
         WeeklyGatesModule,
+        PushModule,
     ],
     controllers: [AppController],
     providers: [AppService],

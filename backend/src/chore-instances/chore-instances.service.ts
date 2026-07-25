@@ -6,6 +6,7 @@ import {
     NotFoundException,
 } from '@nestjs/common';
 import { SupabaseService } from '../supabase/supabase.service';
+import { PushService } from '../push/push.service';
 import { AuthUser } from '../auth/auth-user.interface';
 import { PaidState, RELEASABLE_STATES, RequiredState } from './instance-state';
 import {
@@ -32,7 +33,10 @@ import {
  */
 @Injectable()
 export class ChoreInstancesService {
-    constructor(private readonly supabase: SupabaseService) {}
+    constructor(
+        private readonly supabase: SupabaseService,
+        private readonly push: PushService,
+    ) {}
 
     private minutesFromNow(mins: number): { now: string; deadline: string } {
         const now = new Date();
@@ -158,12 +162,13 @@ export class ChoreInstancesService {
 
         const { data: inst, error } = (await db
             .from('chore_instances')
-            .select('id, state, claimed_by')
+            .select('id, state, claimed_by, chores(title)')
             .eq('id', id)
             .maybeSingle()) as DbResult<{
             id: string;
             state: string;
             claimed_by: string | null;
+            chores: { title: string } | null;
         }>;
         if (error) throw new BadRequestException(error.message);
         if (!inst) throw new NotFoundException('Instance not found');
@@ -192,6 +197,12 @@ export class ChoreInstancesService {
         if (updErr) throw new BadRequestException(updErr.message);
         if (!updated)
             throw new ConflictException('Could not submit this chore');
+
+        void this.push.notifyHouseholdParents(user.householdId, {
+            title: 'Chore submitted 📬',
+            body: `${inst.chores?.title ?? 'A chore'} is ready for your review.`,
+            url: '/chores',
+        });
         return updated;
     }
 
@@ -211,6 +222,13 @@ export class ChoreInstancesService {
         if (error) {
             // The function raises for wrong-state / not-a-parent / cross-household.
             throw new ConflictException(error.message);
+        }
+        if (data?.claimed_by) {
+            void this.push.notifyUsers([data.claimed_by], {
+                title: 'Chore approved! 🎉',
+                body: `You earned ${data.value_cents_snapshot} XP.`,
+                url: '/board',
+            });
         }
         return data;
     }
@@ -254,13 +272,13 @@ export class ChoreInstancesService {
 
         const { data: inst, error } = (await db
             .from('chore_instances')
-            .select('id, state, assigned_to, chores(chore_type)')
+            .select('id, state, assigned_to, chores(chore_type, title)')
             .eq('id', id)
             .maybeSingle()) as DbResult<{
             id: string;
             state: string;
             assigned_to: string | null;
-            chores: { chore_type: string };
+            chores: { chore_type: string; title: string };
         }>;
         if (error) throw new BadRequestException(error.message);
         if (!inst) throw new NotFoundException('Instance not found');
@@ -292,6 +310,12 @@ export class ChoreInstancesService {
         if (updErr) throw new BadRequestException(updErr.message);
         if (!updated)
             throw new ConflictException('Could not mark this chore done');
+
+        void this.push.notifyHouseholdParents(user.householdId, {
+            title: 'Required chore done ✅',
+            body: `${inst.chores.title} was marked done — confirm it.`,
+            url: '/chores',
+        });
         return updated;
     }
 
@@ -304,12 +328,12 @@ export class ChoreInstancesService {
 
         const { data: inst, error } = (await db
             .from('chore_instances')
-            .select('id, state, chores(chore_type)')
+            .select('id, state, chores(chore_type, title)')
             .eq('id', id)
             .maybeSingle()) as DbResult<{
             id: string;
             state: string;
-            chores: { chore_type: string };
+            chores: { chore_type: string; title: string };
         }>;
         if (error) throw new BadRequestException(error.message);
         if (!inst) throw new NotFoundException('Instance not found');
@@ -338,6 +362,14 @@ export class ChoreInstancesService {
         if (updErr) throw new BadRequestException(updErr.message);
         if (!updated)
             throw new ConflictException('Could not confirm this chore');
+
+        if (updated.assigned_to) {
+            void this.push.notifyUsers([updated.assigned_to], {
+                title: 'Chore confirmed ✅',
+                body: `${inst.chores.title} is all done. Nice work!`,
+                url: '/board',
+            });
+        }
         return updated;
     }
 }
