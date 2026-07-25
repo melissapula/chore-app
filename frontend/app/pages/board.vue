@@ -88,6 +88,14 @@ const myRequired = computed(() =>
     ),
 );
 
+// Lifetime level (SPEC §4d): from XP ever earned (positive deltas only).
+const lifetime = computed(() =>
+    history.value
+        .filter((r) => r.delta_cents > 0)
+        .reduce((s, r) => s + r.delta_cents, 0),
+);
+const lvl = computed(() => levelInfo(lifetime.value));
+
 // Pay-gating required chores this kid still owes (SPEC §3a). If any aren't
 // confirmed, their week's pay is at risk — surface a nudge.
 const gating = computed(() => {
@@ -218,11 +226,21 @@ onUnmounted(() => {
         <p class="back"><NuxtLink to="/dashboard">← Home</NuxtLink></p>
         <h1>🗺️ Quest Board</h1>
 
-        <!-- XP balance hero -->
+        <!-- XP balance + level hero -->
         <div class="xp-hero">
-            <span class="xp-star">⭐</span>
-            <span class="xp-total">{{ myXp }}</span>
-            <span class="xp-word">XP</span>
+            <div class="xp-main">
+                <span class="xp-star">⭐</span>
+                <span class="xp-total">{{ myXp }}</span>
+                <span class="xp-word">XP</span>
+                <NuxtLink to="/quests" class="quests-link">🎁 Quests</NuxtLink>
+            </div>
+            <div class="lvl-row">
+                <span class="lvl-badge">Lv {{ lvl.level }}</span>
+                <div class="lvl-bar">
+                    <div class="lvl-fill" :style="{ width: lvl.pct + '%' }" />
+                </div>
+                <span class="lvl-next">{{ lvl.toNext }} to next</span>
+            </div>
         </div>
 
         <mfp-alert v-if="error" variant="error">{{ error }}</mfp-alert>
@@ -417,14 +435,54 @@ onUnmounted(() => {
     margin: 0 0 0.5rem;
 }
 .xp-hero {
-    display: flex;
-    align-items: baseline;
-    justify-content: center;
-    gap: 0.4rem;
     margin: 0.5rem 0 1.25rem;
     padding: 1rem;
     border-radius: var(--radius-lg, 1rem);
     background: var(--color-brand-subtle, #efe7ff);
+}
+.xp-main {
+    display: flex;
+    align-items: baseline;
+    gap: 0.4rem;
+}
+.quests-link {
+    margin-left: auto;
+    align-self: center;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--color-brand-primary, #6c4ce0);
+    text-decoration: none;
+    background: #fff;
+    padding: 0.3rem 0.6rem;
+    border-radius: 999px;
+}
+.lvl-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-top: 0.75rem;
+}
+.lvl-badge {
+    font-family: 'Baloo 2', var(--font-family-sans);
+    font-weight: 800;
+    color: var(--color-brand-primary, #6c4ce0);
+    white-space: nowrap;
+}
+.lvl-bar {
+    flex: 1;
+    height: 0.55rem;
+    border-radius: 999px;
+    background: #fff;
+    overflow: hidden;
+}
+.lvl-fill {
+    height: 100%;
+    background: var(--color-brand-primary, #6c4ce0);
+}
+.lvl-next {
+    font-size: 0.72rem;
+    color: var(--color-text-muted);
+    white-space: nowrap;
 }
 .xp-star {
     font-size: 1.8rem;

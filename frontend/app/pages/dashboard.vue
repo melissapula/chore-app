@@ -214,6 +214,11 @@ onMounted(async () => {
                             >🗺️ Quest Board</mfp-button
                         >
                     </NuxtLink>
+                    <NuxtLink to="/quests">
+                        <mfp-button variant="secondary"
+                            >🎁 My quests</mfp-button
+                        >
+                    </NuxtLink>
                 </template>
             </div>
             <p v-if="pushOk" class="pushrow">

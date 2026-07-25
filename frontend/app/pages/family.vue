@@ -26,6 +26,49 @@ const error = ref<string | null>(null);
 
 // XP balances per kid (sum of ledger deltas). Parent sees all via RLS.
 const xpByKid = ref<Record<string, number>>({});
+// Active personal quests per kid — the parent redeems the ready ones.
+interface Quest {
+    id: string;
+    kid_id: string;
+    title: string;
+    reward: string | null;
+    target_xp: number;
+}
+const questsByKid = ref<Record<string, Quest[]>>({});
+const redeemBusy = ref<string | null>(null);
+
+async function loadQuests() {
+    const { data } = await supabase
+        .from('quests')
+        .select('id, kid_id, title, reward, target_xp')
+        .eq('scope', 'personal')
+        .eq('status', 'active');
+    const byKid: Record<string, Quest[]> = {};
+    for (const q of (data ?? []) as Quest[]) {
+        (byKid[q.kid_id] ??= []).push(q);
+    }
+    questsByKid.value = byKid;
+}
+
+// Quests this kid can afford right now (spendable ≥ target).
+function readyQuests(kidId: string): Quest[] {
+    const bal = xpByKid.value[kidId] ?? 0;
+    return (questsByKid.value[kidId] ?? []).filter((q) => bal >= q.target_xp);
+}
+
+async function redeemQuest(q: Quest) {
+    error.value = null;
+    redeemBusy.value = q.id;
+    const { error: err } = await supabase
+        .schema('chore')
+        .rpc('redeem_quest', { p_quest_id: q.id });
+    redeemBusy.value = null;
+    if (err) {
+        error.value = err.message;
+        return;
+    }
+    await Promise.all([loadBalances(), loadQuests()]);
+}
 // Inline "adjust XP" state — which kid's adjuster is open + its fields.
 const adjustingId = ref<string | null>(null);
 const adjustAmount = ref('');
@@ -239,7 +282,7 @@ onMounted(async () => {
         navigateTo('/dashboard');
         return;
     }
-    await Promise.all([loadMembers(), loadBalances()]);
+    await Promise.all([loadMembers(), loadBalances(), loadQuests()]);
 });
 </script>
 
@@ -446,6 +489,27 @@ onMounted(async () => {
                             {{ adjustBusy ? 'Saving…' : 'Save adjustment' }}
                         </mfp-button>
                     </div>
+
+                    <!-- Quests this kid can afford → grant the reward + redeem -->
+                    <div
+                        v-for="q in readyQuests(m.id)"
+                        :key="q.id"
+                        class="redeem-row"
+                    >
+                        <span class="redeem-info">
+                            🎁 <strong>{{ q.title }}</strong>
+                            <span class="redeem-cost"
+                                >{{ q.target_xp }} XP</span
+                            >
+                        </span>
+                        <mfp-button
+                            variant="primary"
+                            :disabled="redeemBusy === q.id"
+                            @click="redeemQuest(q)"
+                        >
+                            {{ redeemBusy === q.id ? 'Redeeming…' : 'Redeem' }}
+                        </mfp-button>
+                    </div>
                 </li>
             </ul>
         </section>
@@ -603,6 +667,23 @@ form {
 .adjuster-row {
     display: flex;
     gap: 0.6rem;
+}
+.redeem-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: var(--radius-md, 0.75rem);
+    background: #e7f7ea;
+}
+.redeem-info {
+    font-size: 0.9rem;
+}
+.redeem-cost {
+    color: #1f7a34;
+    font-weight: 700;
+    margin-left: 0.4rem;
 }
 .amt-in {
     width: 9rem;
