@@ -107,7 +107,9 @@ chore-app/
       → Parent onboards via `bootstrap_household`; parent adds kids via `POST /kids`
       (`backend/src/kids/`, service role). Kid login = username + PIN (see
       `backend/src/kids/kid-auth.ts`, mirrored in `frontend/app/pages/login.vue`).
-      Frontend: `/family` (parent roster + add-kid), `/board` (kid claim/start/submit).
+      Frontend: `/family` (parent roster — add/edit/delete kids, edit own profile,
+      co-parent invite), `/dashboard` (role-aware home: parent CTA tiles; kid gets
+      the tabbed dashboard, see step 9). `/board` now redirects to `/dashboard`.
 - [x] **2. Paid chore state machine.** templates + instances + claim→start→submit→approve.
       → `backend/src/chores/` (templates + spawn) and `backend/src/chore-instances/`
       (the state machine). Auth via `SupabaseAuthGuard`. Atomic claim (compare-and-set) + atomic approve (`approve_paid_instance()` SQL fn, migration 0003).
@@ -161,6 +163,24 @@ chore-app/
       approves (→ creates a paid chore, stamps `chore_id`) / declines. Guild reuses
       `quests` (`scope='guild'`). Lifetime level curve: L1→L2 = 100 XP, +10%
       compounding per level (`~/utils/level.ts`).
+- [x] **9b. Family-management + dashboard UX** (layered on top of 1–9).
+      → **Kid tabbed dashboard** (`components/KidDashboard.vue`, rendered on
+      `/dashboard`): Main Quest (required + gate nudge), Side Quest (accepted +
+      up-for-grabs paid + bundle planner + XP history), Guild Quest (progress +
+      contribution chart). `/board` redirects here.
+      → **Parent dashboard** (`/dashboard`): CTA tiles (full-width via mfp-button
+      `::part(button)`) — Manage chores, Kids' progress, Family, Weekly pay, Guild,
+      Chore ideas.
+      → **Kids' progress** (`/progress`, parent): each kid's level, quest progress,
+      and guild contribution at a glance (client-side; parent RLS + `GET /guild`).
+      → **Manage chores** (`/chores`): custom chore not in the dropdown
+      (`ChorePicker.vue` pins "Create custom chore" at the top of the filtered
+      list), a bigger emoji picker (`EmojiField.vue`), **edit** a template
+      (`PATCH /chores/:id`), and **remove** a live instance from the pool
+      (`DELETE /chore-instances/:id`).
+      → **Family** (`/family`): **edit/delete a kid** (`PATCH`/`DELETE /kids/:id`,
+      service role — delete cascades via `auth.users`), and a parent **edits their
+      own profile** (name/avatar straight to `chore.users` under RLS `id = auth.uid()`).
 - [ ] **10. Polish → Capacitor wrap → store compliance (COPPA, parental gate, privacy).**
 
 > Ship 1–7 to our own family first. Validate the mechanic before paying the store tax.
@@ -174,10 +194,14 @@ household + role). The caller must have a `chore.users` row — call the
 | Method + path                       | Who     | Effect                                           |
 | ----------------------------------- | ------- | ------------------------------------------------ |
 | `POST /kids`                        | parent  | Add a kid: admin-creates auth user (service role) + `chore.users` row. Username + PIN login. |
+| `PATCH /kids/:id`                    | parent  | Edit a kid (service role): name/avatar → `chore.users`; new username/PIN also re-derive the Auth email/password. |
+| `DELETE /kids/:id`                   | parent  | Delete a kid (service role): admin-delete the Auth user; `auth.users → chore.users` cascade removes their ledger, quests, notes. |
 | `POST /chores`                      | parent  | Create a chore template                          |
 | `GET /chores`                       | member  | List household templates                         |
+| `PATCH /chores/:id`                 | parent  | Edit a template (title, icon, XP, assignee, due, gate…). `chore_type` is not editable. |
 | `POST /chores/:id/instances`        | parent  | Spawn a paid instance (→ OPEN)                   |
 | `GET /chore-instances`              | member  | The household's live pool                        |
+| `DELETE /chore-instances/:id`       | parent  | Remove a live instance from the pool (RLS `instances_delete_parent`; ledger FK set null preserves earned XP). |
 | `POST /chore-instances/:id/claim`   | kid     | OPEN → CLAIMED (starts start-timer; atomic race) |
 | `POST /chore-instances/:id/start`   | claimer | CLAIMED → IN_PROGRESS (starts finish-timer)      |
 | `POST /chore-instances/:id/submit`  | claimer | IN_PROGRESS → SUBMITTED                          |

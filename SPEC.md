@@ -342,14 +342,14 @@ At a couple dozen chores this is computationally trivial — a simple generator,
 
 ## 7. Roles & permissions (RLS)
 
-- **Parent:** create/edit chores, set timer defaults + per-chore overrides, approve/reject/release, adjust balances, view all kids' goals, settle payouts. **Adds kids** and **invites co-parents** to the household.
-- **Kid:** claim / start / submit, leave & read notes, set own goals, allocate own balance. Sees only their own balance + household chore pool.
+- **Parent:** create/edit chores, set timer defaults + per-chore overrides, spawn instances and **remove a live instance from the pool**, approve/reject/release, adjust balances, view all kids' goals, settle payouts. **Adds, edits, and deletes kids**, **edits their own profile**, and **invites co-parents** to the household. Also gets a **household-status view** (each kid's level, quest progress, and guild-quest contribution at a glance).
+- **Kid:** claim / start / submit, leave & read notes, set own goals, allocate own balance, **request a chore**. Sees only their own balance + household chore pool, on a **tabbed dashboard** (Main Quest = required, Side Quest = accepted + up-for-grabs paid, Guild Quest = the shared goal + contribution chart).
 - Enforced with Supabase Row Level Security keyed on `household_id` and `role`.
 
 **Sign-in.**
 
 - **Parents** use **email + password** (Supabase password auth — sign up, then log in). Real email → self-service password reset later.
-- **Kids** have no email, so a parent creates each kid with a **username + PIN**; the backend admin-creates the kid a Supabase Auth user whose email/password are _derived_ from those (synthesized `<username>@choreq.local` + a PIN-based password), and the kid logs in by re-typing the same username + PIN.
+- **Kids** have no email, so a parent creates each kid with a **username + PIN**; the backend admin-creates the kid a Supabase Auth user whose email/password are _derived_ from those (synthesized `<username>@choreq.local` + a PIN-based password), and the kid logs in by re-typing the same username + PIN. A parent can later **edit** a kid (name/avatar update the `users` row; a new username or PIN re-derives and updates the Auth email/password via the admin API) or **delete** a kid (admin-delete the Auth user; the `auth.users → chore.users` cascade removes their profile, ledger, quests, and notes). Both run with the **service role**, same sanctioned path as create.
 - **Co-parents** join an existing household with a **single-use invite code**: an existing parent mints one (`regenerate_join_code()`), the co-parent signs up with their own email + password, then redeems the code (`join_household()`) to get a `parent` row in that household. The code is stored on the household and cleared on use.
 
 Because every user (parent, kid, co-parent) gets a real auth user, RLS (keyed on `auth.uid()`) applies uniformly. The RLS-bypassing paths are minimal and sanctioned: creating a kid runs with the **service role** (`POST /kids`), and the two onboarding RPCs (`bootstrap_household`, `join_household`) are `SECURITY DEFINER` because the caller has no `users` row yet. Everything else goes through the caller's JWT.
