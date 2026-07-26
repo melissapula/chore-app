@@ -106,21 +106,26 @@ async function approve(r: Request) {
     error.value = null;
     busyId.value = r.id;
     try {
-        // Turn the request into a real paid chore template…
-        const chore = await authFetch<{ id: string }>('/chores', {
-            method: 'POST',
-            body: {
-                title: r.title,
-                chore_type: 'paid',
-                value_cents: r.suggested_xp ?? 0,
-            },
-        });
-        // …and stamp it back onto the request.
+        // Idempotent: if a prior attempt already created the chore (stamped its
+        // id), reuse it instead of creating a duplicate on retry / double-click.
+        let choreId = r.chore_id;
+        if (!choreId) {
+            const chore = await authFetch<{ id: string }>('/chores', {
+                method: 'POST',
+                body: {
+                    title: r.title,
+                    chore_type: 'paid',
+                    value_cents: r.suggested_xp ?? 0,
+                },
+            });
+            choreId = chore.id;
+        }
+        // …stamp it back onto the request.
         const { error: err } = await supabase
             .from('chore_requests')
             .update({
                 status: 'approved',
-                chore_id: chore.id,
+                chore_id: choreId,
                 resolved_by: uid.value,
                 resolved_at: new Date().toISOString(),
             })
@@ -268,8 +273,12 @@ onMounted(async () => {
                 </p>
             </section>
 
-            <!-- Everyone: the history -->
-            <section v-if="resolved.length" class="card">
+            <!-- Everyone: the history. Kids see all of theirs (incl. pending) so
+                 they get confirmation and don't resubmit; parents see resolved. -->
+            <section
+                v-if="isParent ? resolved.length : requests.length"
+                class="card"
+            >
                 <h2>{{ isParent ? 'Resolved' : 'Your requests' }}</h2>
                 <ul class="list">
                     <li

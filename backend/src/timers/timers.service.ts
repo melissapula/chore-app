@@ -25,11 +25,7 @@ export class TimersService {
 
     @Cron(CronExpression.EVERY_MINUTE)
     async sweep(): Promise<void> {
-        const now = Date.now();
-        const nowIso = new Date(now).toISOString();
-        // One sweep interval back — used to notify only on the minute a timer
-        // first expires, so we don't re-notify every sweep.
-        const windowStartIso = new Date(now - 60_000).toISOString();
+        const nowIso = new Date().toISOString();
         const db = this.supabase.serviceClient();
 
         // 1. Expired start-timers: a CLAIMED paid chore nobody started → back to OPEN.
@@ -52,20 +48,21 @@ export class TimersService {
             );
 
         // 2. Expired finish-timers: IN_PROGRESS past its deadline. Per SPEC we do NOT
-        //    auto-resolve — the parent decides (extend / release / approve). We push
-        //    a notification the minute it first crosses the deadline (bounded to the
-        //    last sweep window so it fires once).
+        //    auto-resolve — the parent decides (extend / release / approve). Notify
+        //    exactly once: stamp finish_notified_at in the SAME update that selects
+        //    the not-yet-notified rows, so it's idempotent and downtime-safe (a
+        //    long restart can't leave a crossed deadline un-notified forever).
         const { data: overdue, error: overdueErr } = (await db
             .from('chore_instances')
-            .select('id, household_id, finish_deadline, chores(title)')
+            .update({ finish_notified_at: nowIso })
             .eq('state', 'IN_PROGRESS')
             .lt('finish_deadline', nowIso)
-            .gte('finish_deadline', windowStartIso)) as {
+            .is('finish_notified_at', null)
+            .select('id, household_id, chores(title)')) as {
             data:
                 | {
                       id: string;
                       household_id: string;
-                      finish_deadline: string;
                       chores: { title: string } | null;
                   }[]
                 | null;

@@ -183,12 +183,17 @@ async function loadPool(silent = false) {
     if (!silent) loading.value = false;
 }
 async function loadXp() {
-    const { data } = await supabase
+    const { data, error: err } = await supabase
         .from('ledger_entries')
         .select(
             'delta_cents, reason, note, created_at, chore_instances(chores(title, icon_emoji))',
         )
         .order('created_at', { ascending: false });
+    if (err) {
+        // Surface it instead of silently showing 0 XP; keep the last good value.
+        error.value = apiMessage(err);
+        return;
+    }
     const rows = (data ?? []) as unknown as LedgerRow[];
     history.value = rows;
     myXp.value = rows.reduce((sum, r) => sum + r.delta_cents, 0);

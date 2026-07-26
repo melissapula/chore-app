@@ -177,6 +177,7 @@ export class ChoreInstancesService {
                 start_deadline: null,
                 started_at: null,
                 finish_deadline: null,
+                finish_notified_at: null,
                 submitted_at: null,
             })
             .eq('id', id)

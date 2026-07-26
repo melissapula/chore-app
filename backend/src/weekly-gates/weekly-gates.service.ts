@@ -49,6 +49,10 @@ export class WeeklyGatesService {
     /** Monday-anchored week bounds for a date (default: now). Server clock. */
     private weekBounds(dateStr?: string): WeekBounds {
         const base = dateStr ? new Date(`${dateStr}T12:00:00`) : new Date();
+        // A bad `week` param would otherwise NaN through to toISOString() → a 500.
+        if (Number.isNaN(base.getTime())) {
+            throw new BadRequestException('Invalid week — use YYYY-MM-DD');
+        }
         const daysSinceMonday = (base.getDay() + 6) % 7; // 0=Sun..6=Sat → Mon=0
         const start = new Date(base);
         start.setDate(base.getDate() - daysSinceMonday);
@@ -173,7 +177,10 @@ export class WeeklyGatesService {
                 {
                     household_id: user.householdId,
                     kid_id: dto.kid_id,
-                    week_start: dto.week_start,
+                    // Persist the Monday, not the raw (maybe mid-week) input, so
+                    // forWeek()'s Monday-keyed lookup + the unique(kid,week)
+                    // constraint line up.
+                    week_start: gate.week_start,
                     required_total: gate.required_total,
                     required_done: gate.required_done,
                     earned_cents: gate.earned_cents,

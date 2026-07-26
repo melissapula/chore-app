@@ -43,6 +43,12 @@ export class ChoresService {
             // Required chores are always $0 (SPEC §3a); paid default to 0 if omitted.
             value_cents:
                 dto.chore_type === 'required' ? 0 : (dto.value_cents ?? 0),
+            // gates_pay is a required-only concept; a paid chore must never carry
+            // it (it would pollute the weekly-gate query).
+            gates_pay:
+                dto.chore_type === 'required'
+                    ? (dto.gates_pay ?? false)
+                    : false,
         };
 
         const db = this.supabase.userClient(user.accessToken);
