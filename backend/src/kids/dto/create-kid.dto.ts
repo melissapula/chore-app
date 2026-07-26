@@ -32,9 +32,11 @@ export class CreateKidDto {
     @IsString()
     avatar_emoji?: string;
 
-    // A data: URL (parent may upload a photo, like their own avatar).
+    // A data: URL (parent may upload a photo, like their own avatar). Client
+    // downscales to ~160px; cap it so a crafted client can't send a huge blob.
     @IsOptional()
     @IsString()
+    @MaxLength(1_500_000)
     avatar_url?: string;
 
     @IsOptional()

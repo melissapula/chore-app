@@ -39,6 +39,7 @@ export class UpdateKidDto {
     @IsOptional()
     @ValidateIf((_o, v) => v !== null)
     @IsString()
+    @MaxLength(1_500_000)
     avatar_url?: string | null;
 
     // §3b: powers the risky-chore age warning. null clears it.
