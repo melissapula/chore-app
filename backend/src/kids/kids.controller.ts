@@ -1,6 +1,7 @@
 import {
     Body,
     Controller,
+    Delete,
     Param,
     ParseUUIDPipe,
     Patch,
@@ -33,5 +34,14 @@ export class KidsController {
         @Body() dto: UpdateKidDto,
     ) {
         return this.kids.update(user, id, dto);
+    }
+
+    /** parent → delete a kid and all their data. */
+    @Delete(':id')
+    remove(
+        @CurrentUser() user: AuthUser,
+        @Param('id', ParseUUIDPipe) id: string,
+    ) {
+        return this.kids.remove(user, id);
     }
 }

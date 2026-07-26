@@ -209,6 +209,73 @@ async function saveKid() {
     savingKid.value = false;
 }
 
+// delete-kid confirm
+const removeKidConfirm = ref<string | null>(null);
+const removingKid = ref(false);
+async function removeKid(kidId: string) {
+    error.value = null;
+    removingKid.value = true;
+    try {
+        await authFetch(`/kids/${kidId}`, { method: 'DELETE' });
+        removeKidConfirm.value = null;
+        editKidId.value = null;
+        await loadMembers();
+    } catch (e) {
+        error.value = apiMessage(e);
+    }
+    removingKid.value = false;
+}
+
+// edit-own-profile (parent) — name + avatar, via RLS (id = auth.uid()).
+const editParentId = ref<string | null>(null);
+const editParentName = ref('');
+const editParentAvatar = ref<AvatarValue | null>(null);
+const editParentAvatarOpen = ref(false);
+const savingParent = ref(false);
+function startEditParent(m: Member) {
+    editParentId.value = m.id;
+    editParentName.value = m.display_name;
+    editParentAvatar.value = m.avatar_url
+        ? { kind: 'image', dataUrl: m.avatar_url }
+        : m.avatar_emoji
+          ? { kind: 'emoji', emoji: m.avatar_emoji }
+          : null;
+    error.value = null;
+}
+function cancelEditParent() {
+    editParentId.value = null;
+}
+async function saveParent() {
+    if (!editParentId.value) return;
+    error.value = null;
+    if (!editParentName.value.trim()) {
+        error.value = 'Give yourself a name.';
+        return;
+    }
+    savingParent.value = true;
+    const patch: Record<string, unknown> = {
+        display_name: editParentName.value.trim(),
+    };
+    if (editParentAvatar.value?.kind === 'emoji') {
+        patch.avatar_emoji = editParentAvatar.value.emoji;
+        patch.avatar_url = null;
+    } else if (editParentAvatar.value?.kind === 'image') {
+        patch.avatar_emoji = null;
+        patch.avatar_url = editParentAvatar.value.dataUrl;
+    }
+    const { error: err } = await supabase
+        .from('users')
+        .update(patch)
+        .eq('id', editParentId.value);
+    savingParent.value = false;
+    if (err) {
+        error.value = err.message;
+        return;
+    }
+    editParentId.value = null;
+    await loadMembers();
+}
+
 const kids = computed(() => members.value.filter((m) => m.role === 'kid'));
 const parents = computed(() =>
     members.value.filter((m) => m.role === 'parent'),
@@ -473,15 +540,90 @@ onMounted(async () => {
         <section v-if="!loading" class="card">
             <h2>Grown-ups</h2>
             <ul class="list">
-                <li v-for="m in parents" :key="m.id" class="item">
-                    <span class="avatar">
-                        <img v-if="m.avatar_url" :src="m.avatar_url" alt="" />
-                        <template v-else>{{ m.avatar_emoji || '🧑' }}</template>
-                    </span>
-                    <span class="grow"
-                        ><strong>{{ m.display_name }}</strong></span
-                    >
-                    <span class="role-badge">parent</span>
+                <li v-for="m in parents" :key="m.id" class="kid-row">
+                    <div class="item">
+                        <span class="avatar">
+                            <img
+                                v-if="m.avatar_url"
+                                :src="m.avatar_url"
+                                alt=""
+                            />
+                            <template v-else>{{
+                                m.avatar_emoji || '🧑'
+                            }}</template>
+                        </span>
+                        <span class="grow">
+                            <strong>{{ m.display_name }}</strong>
+                            <span v-if="m.id === uid" class="uname">you</span>
+                        </span>
+                        <button
+                            v-if="m.id === uid"
+                            class="edit-btn"
+                            aria-label="Edit your profile"
+                            title="Edit"
+                            @click="
+                                editParentId === m.id
+                                    ? cancelEditParent()
+                                    : startEditParent(m)
+                            "
+                        >
+                            ✏️
+                        </button>
+                        <span class="role-badge">parent</span>
+                    </div>
+
+                    <!-- Edit your own name + avatar -->
+                    <div v-if="editParentId === m.id" class="kid-edit">
+                        <mfp-input
+                            label="Your name"
+                            name="editParentName"
+                            :value.prop="editParentName"
+                            @input="
+                                editParentName = (
+                                    $event.target as HTMLInputElement
+                                ).value
+                            "
+                        />
+                        <div class="avatar-field">
+                            <span class="avatar-label">Avatar</span>
+                            <div class="avatar-row">
+                                <span class="avatar-preview">
+                                    <img
+                                        v-if="
+                                            editParentAvatar?.kind === 'image'
+                                        "
+                                        :src="editParentAvatar.dataUrl"
+                                        alt="Your avatar"
+                                    />
+                                    <template v-else>{{
+                                        editParentAvatar?.emoji || '🙂'
+                                    }}</template>
+                                </span>
+                                <mfp-button
+                                    type="button"
+                                    variant="secondary"
+                                    @click="editParentAvatarOpen = true"
+                                >
+                                    Change avatar
+                                </mfp-button>
+                            </div>
+                        </div>
+                        <div class="edit-actions">
+                            <mfp-button
+                                variant="primary"
+                                :disabled="savingParent"
+                                @click="saveParent"
+                            >
+                                {{ savingParent ? 'Saving…' : 'Save changes' }}
+                            </mfp-button>
+                            <mfp-button
+                                variant="ghost"
+                                @click="cancelEditParent"
+                            >
+                                Cancel
+                            </mfp-button>
+                        </div>
+                    </div>
                 </li>
             </ul>
 
@@ -601,6 +743,41 @@ onMounted(async () => {
                                 Cancel
                             </mfp-button>
                         </div>
+
+                        <!-- Danger zone: remove the kid entirely -->
+                        <div class="danger-zone">
+                            <button
+                                v-if="removeKidConfirm !== m.id"
+                                type="button"
+                                class="danger-link"
+                                @click="removeKidConfirm = m.id"
+                            >
+                                Remove {{ m.display_name }} from the household
+                            </button>
+                            <div v-else class="remove-confirm">
+                                <span class="remove-q">
+                                    This permanently deletes their account, XP,
+                                    and quests. Sure?
+                                </span>
+                                <div class="remove-btns">
+                                    <mfp-button
+                                        variant="danger"
+                                        :disabled="removingKid"
+                                        @click="removeKid(m.id)"
+                                    >
+                                        {{
+                                            removingKid ? 'Removing…' : 'Remove'
+                                        }}
+                                    </mfp-button>
+                                    <mfp-button
+                                        variant="ghost"
+                                        @click="removeKidConfirm = null"
+                                    >
+                                        Keep
+                                    </mfp-button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Inline adjuster: give a bonus or dock XP (parent_adjustment) -->
@@ -666,6 +843,10 @@ onMounted(async () => {
 
         <AvatarPickerModal v-model:open="avatarPickerOpen" v-model="avatar" />
         <AvatarPickerModal v-model:open="editAvatarOpen" v-model="editAvatar" />
+        <AvatarPickerModal
+            v-model:open="editParentAvatarOpen"
+            v-model="editParentAvatar"
+        />
     </main>
 </template>
 
@@ -818,6 +999,35 @@ form {
     background: var(--color-brand-subtle, #efe7ff);
 }
 .edit-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+.danger-zone {
+    margin-top: 0.5rem;
+    padding-top: 0.6rem;
+    border-top: 1px solid rgba(179, 38, 30, 0.2);
+}
+.danger-link {
+    border: none;
+    background: none;
+    padding: 0;
+    font: inherit;
+    font-size: 0.85rem;
+    color: #b3261e;
+    text-decoration: underline;
+    cursor: pointer;
+}
+.remove-confirm {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+.remove-q {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #b3261e;
+}
+.remove-btns {
     display: flex;
     gap: 0.5rem;
 }

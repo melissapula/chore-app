@@ -186,4 +186,37 @@ export class KidsService {
         }
         return updated;
     }
+
+    /**
+     * Delete a kid (parent). Removing the Auth user cascades: auth.users →
+     * chore.users (FK on delete cascade) → their ledger, quests, notes, etc.
+     * Irreversible — the frontend confirms first.
+     */
+    async remove(parent: AuthUser, kidId: string): Promise<{ ok: true }> {
+        if (parent.role !== 'parent') {
+            throw new ForbiddenException('Only a parent can remove a kid');
+        }
+        const service = this.supabase.serviceClient();
+
+        const { data: kid } = (await service
+            .from('users')
+            .select('id, household_id, role')
+            .eq('id', kidId)
+            .maybeSingle()) as DbResult<{
+            id: string;
+            household_id: string;
+            role: string;
+        }>;
+        if (
+            !kid ||
+            kid.household_id !== parent.householdId ||
+            kid.role !== 'kid'
+        ) {
+            throw new ForbiddenException('That kid is not in your household');
+        }
+
+        const { error } = await service.auth.admin.deleteUser(kidId);
+        if (error) throw new BadRequestException(error.message);
+        return { ok: true };
+    }
 }
