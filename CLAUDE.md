@@ -278,3 +278,13 @@ cd frontend && npm run dev
 Environment: copy `backend/.env.example` → `backend/.env` and
 `frontend/.env.example` → `frontend/.env`, then fill in Supabase URL + keys.
 Never commit `.env`.
+
+## How to deploy
+
+See **`DEPLOY.md`** — the click-by-click for going live: backend → **Railway**
+(always-on, so the per-minute timer cron keeps running; `backend/railway.json`
+pins the build/start), frontend → **Vercel** (free), Supabase already hosted.
+The one gotcha to remember: deploy the backend first for its URL, then set the
+frontend's `API_BASE` to it and the backend's `FRONTEND_ORIGIN` to the Vercel URL
+(the backend refuses to boot in prod without `NODE_ENV=production` + `FRONTEND_ORIGIN`),
+and add the Vercel URL to Supabase Auth → URL Configuration so email links redirect back.
