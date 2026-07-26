@@ -21,6 +21,7 @@ interface Instance {
     gates_pay: boolean;
     start_deadline: string | null;
     finish_deadline: string | null;
+    submitted_at: string | null;
     due_date: string | null;
     chores: {
         title: string;
@@ -81,6 +82,9 @@ const onTabKeys = useTabKeys(
 );
 const pool = ref<Instance[]>([]);
 const myXp = ref(0);
+const displayXp = ref(0); // tweened value the hero shows (counts up on a gain)
+const xpGain = ref<number | null>(null); // the floating "+N" burst
+let lastXp: number | null = null; // previous total, to detect a gain
 const history = ref<LedgerRow[]>([]);
 const guild = ref<GuildView | null>(null);
 const loading = ref(true);
@@ -144,6 +148,35 @@ const gating = computed(() => {
     };
 });
 
+// --- streaks + achievements (all derived from data already loaded) ---
+const streak = computed(() =>
+    streakInfo(
+        history.value.filter((r) => r.delta_cents > 0).map((r) => r.created_at),
+    ),
+);
+const achievements = computed(() =>
+    computeAchievements({
+        approvedCount: history.value.filter(
+            (r) => r.reason === 'chore_approved',
+        ).length,
+        lifetimeXp: lifetime.value,
+        beatTimer: myDone.value.some(
+            (i) =>
+                !!i.submitted_at &&
+                !!i.finish_deadline &&
+                new Date(i.submitted_at) <= new Date(i.finish_deadline),
+        ),
+        streak: streak.value.count,
+        redeemedQuest: history.value.some((r) => r.reason === 'quest_redeemed'),
+        guildContribXp:
+            guild.value?.contributions.find((c) => c.kid_id === props.uid)
+                ?.xp ?? 0,
+    }),
+);
+const earnedCount = computed(
+    () => achievements.value.filter((a) => a.earned).length,
+);
+
 // --- guild chart helpers ---
 const guildPct = computed(() => {
     const q = guild.value?.quest;
@@ -194,6 +227,31 @@ function checkLevelUp() {
         celebrateRank.value = info.rank;
     }
     localStorage.setItem(key, String(info.level));
+}
+
+// Count the hero XP up on a gain (easeOut), and float a "+N" burst.
+function tweenXp(to: number) {
+    const from = displayXp.value;
+    if (from === to) return;
+    const startT = performance.now();
+    const dur = 700;
+    const step = (t: number) => {
+        const p = Math.min(1, (t - startT) / dur);
+        displayXp.value = Math.round(from + (to - from) * (1 - (1 - p) ** 3));
+        if (p < 1) requestAnimationFrame(step);
+        else displayXp.value = to;
+    };
+    requestAnimationFrame(step);
+}
+function onXpLoaded(newXp: number) {
+    if (typeof window !== 'undefined' && lastXp !== null && newXp > lastXp) {
+        xpGain.value = newXp - lastXp;
+        setTimeout(() => (xpGain.value = null), 1700);
+        tweenXp(newXp);
+    } else {
+        displayXp.value = newXp; // first load or a spend: snap, no burst
+    }
+    lastXp = newXp;
 }
 
 function dueLabel(iso: string | null): string {
@@ -247,6 +305,7 @@ async function loadXp() {
     history.value = rows;
     myXp.value = rows.reduce((sum, r) => sum + r.delta_cents, 0);
     checkLevelUp();
+    onXpLoaded(myXp.value);
 }
 async function loadGuild() {
     try {
@@ -383,8 +442,11 @@ onUnmounted(() => {
         <div class="xp-hero viz-root">
             <div class="xp-main">
                 <span class="xp-star">⭐</span>
-                <span class="xp-total">{{ myXp }}</span>
+                <span class="xp-total">{{ displayXp }}</span>
                 <span class="xp-word">XP</span>
+                <transition name="pop">
+                    <span v-if="xpGain" class="xp-gain">+{{ xpGain }} 🪙</span>
+                </transition>
                 <NuxtLink to="/quests" class="quests-link">🎁 Rewards</NuxtLink>
             </div>
             <div class="lvl-row">
@@ -395,6 +457,13 @@ onUnmounted(() => {
                     <div class="lvl-fill" :style="{ width: lvl.pct + '%' }" />
                 </div>
                 <span class="lvl-next">{{ lvl.toNext }} to next</span>
+            </div>
+            <div v-if="streak.count" class="streak">
+                🔥 {{ streak.count }}-day streak<template v-if="!streak.active"
+                    ><span class="streak-nudge">
+                        — do a chore to keep it!</span
+                    ></template
+                >
             </div>
         </div>
 
@@ -437,6 +506,30 @@ onUnmounted(() => {
 
         <mfp-alert v-if="error" variant="error">{{ error }}</mfp-alert>
         <p v-if="loading" class="muted">Loading…</p>
+
+        <!-- 🏆 Badges -->
+        <section v-if="!loading" class="badges">
+            <div class="badges-head">
+                <h3>🏆 Badges</h3>
+                <span class="badges-count"
+                    >{{ earnedCount }}/{{ achievements.length }}</span
+                >
+            </div>
+            <div class="badge-strip">
+                <div
+                    v-for="a in achievements"
+                    :key="a.id"
+                    class="badge"
+                    :class="{ earned: a.earned }"
+                    :title="`${a.title} — ${a.desc}`"
+                >
+                    <span class="badge-emoji">{{
+                        a.earned ? a.emoji : '🔒'
+                    }}</span>
+                    <span class="badge-title">{{ a.title }}</span>
+                </div>
+            </div>
+        </section>
 
         <!-- ===================== MAIN QUEST ===================== -->
         <section v-show="tab === 'main'" v-if="!loading" class="panel">
@@ -902,9 +995,41 @@ onUnmounted(() => {
     background: var(--color-brand-subtle, #efe7ff);
 }
 .xp-main {
+    position: relative;
     display: flex;
     align-items: baseline;
     gap: 0.4rem;
+}
+.xp-gain {
+    position: absolute;
+    left: 2.2rem;
+    top: -0.4rem;
+    font-weight: 800;
+    color: #1f7a34;
+    pointer-events: none;
+    animation: cq-rise 1.6s ease-out forwards;
+}
+@keyframes cq-rise {
+    0% {
+        transform: translateY(0);
+        opacity: 0;
+    }
+    15% {
+        opacity: 1;
+    }
+    100% {
+        transform: translateY(-2rem);
+        opacity: 0;
+    }
+}
+.pop-enter-active {
+    transition:
+        transform 0.2s ease,
+        opacity 0.2s ease;
+}
+.pop-enter-from {
+    transform: scale(0.6);
+    opacity: 0;
 }
 .xp-star {
     font-size: 1.8rem;
@@ -958,6 +1083,69 @@ onUnmounted(() => {
     font-size: 0.72rem;
     color: var(--color-text-muted);
     white-space: nowrap;
+}
+.streak {
+    margin-top: 0.6rem;
+    font-size: 0.9rem;
+    font-weight: 800;
+    color: #c2410c;
+}
+.streak-nudge {
+    font-weight: 600;
+    color: var(--color-text-muted);
+}
+/* 🏆 badges */
+.badges {
+    margin-bottom: 1rem;
+}
+.badges-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+}
+.badges-head h3 {
+    margin: 0;
+    font-family: 'Baloo 2', var(--font-family-sans);
+    font-size: 1rem;
+}
+.badges-count {
+    font-weight: 800;
+    color: var(--color-brand-primary, #6c4ce0);
+}
+.badge-strip {
+    display: flex;
+    gap: 0.5rem;
+    overflow-x: auto;
+    padding-bottom: 0.25rem;
+}
+.badge {
+    flex: 0 0 auto;
+    width: 4.5rem;
+    padding: 0.5rem 0.25rem;
+    text-align: center;
+    border-radius: var(--radius-md, 0.75rem);
+    background: var(--color-surface-muted, #f5f3f7);
+    opacity: 0.55;
+    filter: grayscale(0.8);
+}
+.badge.earned {
+    opacity: 1;
+    filter: none;
+    background: var(--color-brand-subtle, #efe7ff);
+    box-shadow: inset 0 0 0 2px var(--color-brand-primary, #6c4ce0);
+}
+.badge-emoji {
+    display: block;
+    font-size: 1.6rem;
+    line-height: 1.2;
+}
+.badge-title {
+    display: block;
+    font-size: 0.65rem;
+    font-weight: 700;
+    line-height: 1.1;
+    margin-top: 0.2rem;
 }
 /* tabs */
 .tabs {
