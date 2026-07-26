@@ -48,6 +48,16 @@ const error = ref<string | null>(null);
 const busyId = ref<string | null>(null);
 const openNotes = ref<string | null>(null); // instance id whose note thread is open
 const removingId = ref<string | null>(null); // instance id awaiting remove confirm
+const archivingId = ref<string | null>(null); // template id awaiting archive confirm
+const archiveBusy = ref<string | null>(null); // template id mid archive/unarchive
+
+// Templates split by active flag: archived ones leave the working list but stay
+// around (can't be spawned — the backend blocks inactive templates) so a parent
+// can restore them instead of losing the chore forever.
+const activeTemplates = computed(() => templates.value.filter((c) => c.active));
+const archivedTemplates = computed(() =>
+    templates.value.filter((c) => !c.active),
+);
 
 // new-chore form
 const choreType = ref<'paid' | 'required'>('paid');
@@ -239,6 +249,25 @@ async function saveEdit() {
         error.value = apiMessage(e);
     }
     savingEdit.value = false;
+}
+
+// Archive / unarchive a template (parent). Reuses PATCH /chores/:id { active }.
+// Archived templates can't be spawned; unarchiving brings them back.
+async function setArchived(id: string, archived: boolean) {
+    error.value = null;
+    archiveBusy.value = id;
+    try {
+        await authFetch(`/chores/${id}`, {
+            method: 'PATCH',
+            body: { active: !archived },
+        });
+        archivingId.value = null;
+        if (editId.value === id) editId.value = null;
+        await loadAll();
+    } catch (e) {
+        error.value = apiMessage(e);
+    }
+    archiveBusy.value = null;
 }
 
 // Spawn a live instance: paid → OPEN pool; required → ASSIGNED to its kid.
@@ -452,8 +481,11 @@ onUnmounted(() => {
             <p v-if="!templates.length" class="muted">
                 No chores yet — create your first one above.
             </p>
+            <p v-else-if="!activeTemplates.length" class="muted">
+                No active chores — they're all archived (see below).
+            </p>
             <ul v-else class="list">
-                <li v-for="c in templates" :key="c.id" class="tmpl-item">
+                <li v-for="c in activeTemplates" :key="c.id" class="tmpl-item">
                     <div class="item">
                         <span class="icon">{{ c.icon_emoji || '📋' }}</span>
                         <span class="grow">
@@ -571,6 +603,85 @@ onUnmounted(() => {
                                 Cancel
                             </mfp-button>
                         </div>
+
+                        <!-- Archive: soft-retire a chore without deleting it -->
+                        <div class="archive-zone">
+                            <button
+                                v-if="archivingId !== c.id"
+                                type="button"
+                                class="archive-link"
+                                @click="archivingId = c.id"
+                            >
+                                🗄️ Archive this chore
+                            </button>
+                            <div v-else class="archive-confirm">
+                                <span class="archive-q">
+                                    Archiving hides it from your list and the
+                                    pool. You can unarchive it later.
+                                </span>
+                                <div class="archive-btns">
+                                    <mfp-button
+                                        variant="danger"
+                                        :disabled="archiveBusy === c.id"
+                                        @click="setArchived(c.id, true)"
+                                    >
+                                        {{
+                                            archiveBusy === c.id
+                                                ? 'Archiving…'
+                                                : 'Archive'
+                                        }}
+                                    </mfp-button>
+                                    <mfp-button
+                                        variant="ghost"
+                                        @click="archivingId = null"
+                                    >
+                                        Keep
+                                    </mfp-button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </li>
+            </ul>
+        </section>
+
+        <!-- Archived templates -->
+        <section
+            v-if="!loading && archivedTemplates.length"
+            class="card archived-card"
+        >
+            <h2>🗄️ Archived</h2>
+            <p class="muted small">
+                Hidden from the pool. Unarchive to use a chore again.
+            </p>
+            <ul class="list">
+                <li
+                    v-for="c in archivedTemplates"
+                    :key="c.id"
+                    class="tmpl-item"
+                >
+                    <div class="item archived-item">
+                        <span class="icon">{{ c.icon_emoji || '📋' }}</span>
+                        <span class="grow">
+                            <strong>{{ c.title }}</strong>
+                            <span v-if="c.chore_type === 'paid'" class="xp"
+                                >{{ c.value_cents }} XP</span
+                            >
+                            <span v-else class="req-sub">
+                                Required · for {{ kidName(c.assigned_kid_id) }}
+                            </span>
+                        </span>
+                        <mfp-button
+                            variant="secondary"
+                            :disabled="archiveBusy === c.id"
+                            @click="setArchived(c.id, false)"
+                        >
+                            {{
+                                archiveBusy === c.id
+                                    ? 'Restoring…'
+                                    : 'Unarchive'
+                            }}
+                        </mfp-button>
                     </div>
                 </li>
             </ul>
@@ -867,6 +978,40 @@ form {
     font-size: 0.9rem;
     font-weight: 700;
     color: #b3261e;
+}
+.archive-zone {
+    border-top: 1px solid var(--color-surface-muted, #e6e0f5);
+    padding-top: 0.6rem;
+}
+.archive-link {
+    border: none;
+    background: none;
+    padding: 0;
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--color-text-muted);
+    text-decoration: underline;
+}
+.archive-confirm {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+.archive-q {
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+}
+.archive-btns {
+    display: flex;
+    gap: 0.5rem;
+}
+.archived-card {
+    opacity: 0.9;
+}
+.archived-item {
+    opacity: 0.7;
 }
 .icon {
     font-size: 1.5rem;

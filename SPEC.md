@@ -342,7 +342,7 @@ At a couple dozen chores this is computationally trivial — a simple generator,
 
 ## 7. Roles & permissions (RLS)
 
-- **Parent:** create/edit chores, set timer defaults + per-chore overrides, spawn instances and **remove a live instance from the pool**, approve/reject/release, adjust balances, view all kids' goals, settle payouts. **Adds, edits, and deletes kids**, **edits their own profile**, and **invites co-parents** to the household. Also gets a **household-status view** (each kid's level, quest progress, and guild-quest contribution at a glance).
+- **Parent:** create/edit chores, **archive/unarchive a chore template** (soft-retire — an archived template leaves the working list and can't be spawned, but is restorable), set timer defaults + per-chore overrides, spawn instances and **remove a live instance from the pool**, approve/reject/release, adjust balances, view all kids' goals, settle payouts. **Adds, edits, and deletes kids**, **edits their own profile**, and **invites co-parents** to the household. Also gets a **household-status view** (each kid's level, quest progress, and guild-quest contribution at a glance).
 - **Kid:** claim / start / submit, leave & read notes, set own goals, allocate own balance, **request a chore**. Sees only their own balance + household chore pool, on a **tabbed dashboard** (Main Quest = required, Side Quest = accepted + up-for-grabs paid, Guild Quest = the shared goal + contribution chart).
 - Enforced with Supabase Row Level Security keyed on `household_id` and `role`.
 

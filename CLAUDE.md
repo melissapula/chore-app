@@ -176,8 +176,10 @@ chore-app/
       → **Manage chores** (`/chores`): custom chore not in the dropdown
       (`ChorePicker.vue` pins "Create custom chore" at the top of the filtered
       list), a bigger emoji picker (`EmojiField.vue`), **edit** a template
-      (`PATCH /chores/:id`), and **remove** a live instance from the pool
-      (`DELETE /chore-instances/:id`).
+      (`PATCH /chores/:id`), **archive/unarchive** a template (same PATCH with
+      `{ active }` — archived templates drop into an "Archived" section and can't
+      be spawned; there's no hard template delete by design), and **remove** a
+      live instance from the pool (`DELETE /chore-instances/:id`).
       → **Family** (`/family`): **edit/delete a kid** (`PATCH`/`DELETE /kids/:id`,
       service role — delete cascades via `auth.users`), and a parent **edits their
       own profile** (name/avatar straight to `chore.users` under RLS `id = auth.uid()`).
