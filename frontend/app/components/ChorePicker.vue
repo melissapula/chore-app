@@ -1,14 +1,16 @@
 <script setup lang="ts">
 // Searchable chore picker. Common chores come pre-gamified (a quest-flavored
 // name kids see) with the plain name kept for search + a subtitle hint. Typing
-// filters on both AND always offers "Create <what you typed>" as a custom chore
-// — even when the text partially matches a preset. Emits `select`; the parent
-// form fills from it (custom emits xp 0 / no emoji, for the parent to edit).
+// filters the presets below. A "Create a custom chore" option is pinned at the
+// TOP of the list (it reflects whatever you've typed) so making your own is an
+// explicit choice, not a search side effect. Emits `select`; a custom pick sets
+// `custom: true` so the form shows an editable name field.
 export interface ChorePreset {
     title: string; // gamified, quest-flavored name (what kids see)
     plain: string; // plain name — for search + a subtitle hint
     emoji: string;
     xp: number;
+    custom?: boolean; // true when the parent chose "Create a custom chore"
 }
 
 const emit = defineEmits<{ select: [ChorePreset] }>();
@@ -178,8 +180,8 @@ function choose(preset: ChorePreset) {
 
 function createCustom() {
     const title = query.value.trim();
-    if (!title) return;
-    emit('select', { title, plain: title, emoji: '', xp: 0 });
+    // Allow an empty name — the form shows an editable name field for customs.
+    emit('select', { title, plain: title, emoji: '', xp: 0, custom: true });
     query.value = '';
     open.value = false;
 }
@@ -210,6 +212,21 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onDocPointer));
         />
 
         <div v-if="open" class="menu">
+            <!-- Create custom, pinned at the top; reflects what you've typed. -->
+            <button type="button" class="opt custom" @click="createCustom">
+                <span class="e">➕</span>
+                <span class="t">
+                    <span class="quest">{{
+                        query.trim()
+                            ? `Create “${query.trim()}”`
+                            : 'Create a custom chore'
+                    }}</span>
+                    <span class="plain"
+                        >Your own chore — name it and set the XP</span
+                    >
+                </span>
+            </button>
+
             <ul v-if="filtered.length" class="opts">
                 <li v-for="c in filtered" :key="c.title">
                     <button type="button" class="opt" @click="choose(c)">
@@ -222,29 +239,10 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onDocPointer));
                     </button>
                 </li>
             </ul>
-            <p v-else-if="query.trim()" class="hint">
-                No matches — make up your own:
-            </p>
             <p v-else class="hint">
-                Pick one above, or type your own chore name.
+                No preset matches — use <strong>Create a custom chore</strong>
+                above.
             </p>
-
-            <!-- Always let the parent create a custom chore from what they typed,
-                 even when the text partially matches a preset. -->
-            <button
-                v-if="query.trim()"
-                type="button"
-                class="opt custom"
-                @click="createCustom"
-            >
-                <span class="e">➕</span>
-                <span class="t">
-                    <span class="quest">Create “{{ query.trim() }}”</span>
-                    <span class="plain"
-                        >Custom chore — set your own XP next</span
-                    >
-                </span>
-            </button>
         </div>
     </div>
 </template>
@@ -336,10 +334,10 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onDocPointer));
     color: var(--color-text-muted, #6b6672);
 }
 .opt.custom {
-    margin: 0.15rem 0.25rem 0.25rem;
+    margin: 0.25rem 0.25rem 0.15rem;
     width: calc(100% - 0.5rem);
-    border-top: 1px solid var(--color-surface-muted, #e6e2ef);
-    border-radius: 0 0 var(--radius-sm, 0.5rem) var(--radius-sm, 0.5rem);
+    border-bottom: 1px solid var(--color-surface-muted, #e6e2ef);
+    border-radius: var(--radius-sm, 0.5rem) var(--radius-sm, 0.5rem) 0 0;
     color: var(--color-brand-primary, #6c4ce0);
 }
 .opt.custom .quest {

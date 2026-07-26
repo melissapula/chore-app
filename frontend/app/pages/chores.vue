@@ -53,6 +53,7 @@ const choreType = ref<'paid' | 'required'>('paid');
 const title = ref('');
 const emoji = ref('');
 const xp = ref<number | null>(null);
+const isCustom = ref(false); // paid: chose "Create a custom chore" → editable name
 const assignedKid = ref('');
 const dueType = ref<'end_of_day' | 'end_of_week'>('end_of_day');
 const gatesPay = ref(false);
@@ -67,10 +68,16 @@ function kidName(id: string | null): string {
 }
 
 // Fill the paid form from a picked preset (gamified chore, or a custom one).
-function onPreset(p: { title: string; emoji: string; xp: number }) {
+function onPreset(p: {
+    title: string;
+    emoji: string;
+    xp: number;
+    custom?: boolean;
+}) {
     title.value = p.title;
     emoji.value = p.emoji || '';
     xp.value = p.xp || null;
+    isCustom.value = !!p.custom;
 }
 
 function switchType(t: 'paid' | 'required') {
@@ -79,6 +86,7 @@ function switchType(t: 'paid' | 'required') {
     title.value = '';
     emoji.value = '';
     xp.value = null;
+    isCustom.value = false;
     error.value = null;
 }
 
@@ -155,6 +163,7 @@ async function createChore() {
         title.value = '';
         emoji.value = '';
         xp.value = null;
+        isCustom.value = false;
         gatesPay.value = false;
         await loadAll();
     } catch (e) {
@@ -252,22 +261,28 @@ onUnmounted(() => {
                 <template v-if="choreType === 'paid'">
                     <ChorePicker @select="onPreset" />
 
-                    <div v-if="title" class="chosen">
+                    <!-- Custom chore → name it yourself -->
+                    <mfp-input
+                        v-if="isCustom"
+                        label="Chore name"
+                        name="customTitle"
+                        placeholder="Name your chore"
+                        :value.prop="title"
+                        @input="
+                            title = ($event.target as HTMLInputElement).value
+                        "
+                    />
+                    <!-- Preset → show the gamified name -->
+                    <div v-else-if="title" class="chosen">
                         <span class="chosen-emoji">{{ emoji || '📋' }}</span>
                         <strong>{{ title }}</strong>
                     </div>
 
-                    <div v-if="title" class="row">
-                        <mfp-input
-                            class="emoji-in"
-                            label="Icon"
-                            name="emoji"
-                            :value.prop="emoji"
-                            @input="
-                                emoji = ($event.target as HTMLInputElement)
-                                    .value
-                            "
-                        />
+                    <div v-if="isCustom || title" class="row">
+                        <div class="icon-col">
+                            <span class="field-label">Icon</span>
+                            <EmojiField v-model="emoji" />
+                        </div>
                         <mfp-input
                             class="xp-in"
                             label="XP reward"
@@ -298,16 +313,10 @@ onUnmounted(() => {
                         "
                     />
                     <div class="row">
-                        <mfp-input
-                            class="emoji-in"
-                            label="Icon"
-                            name="reqEmoji"
-                            :value.prop="emoji"
-                            @input="
-                                emoji = ($event.target as HTMLInputElement)
-                                    .value
-                            "
-                        />
+                        <div class="icon-col">
+                            <span class="field-label">Icon</span>
+                            <EmojiField v-model="emoji" />
+                        </div>
                         <label class="field grow-field">
                             <span class="field-label">Assign to</span>
                             <select v-model="assignedKid" class="select">
@@ -584,6 +593,12 @@ form {
 }
 .emoji-in {
     width: 5rem;
+    flex: none;
+}
+.icon-col {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
     flex: none;
 }
 .xp-in {
