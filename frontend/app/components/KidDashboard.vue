@@ -180,21 +180,21 @@ function confStyle(n: number) {
 function confEmoji(n: number): string {
     return CONF[n % CONF.length]!;
 }
-watch(
-    () => lvl.value.level,
-    (newLvl) => {
-        if (typeof window === 'undefined') return;
-        const key = `cq-lastlvl-${props.uid}`;
-        const seen = Number(localStorage.getItem(key) || '0');
-        if (newLvl > seen) {
-            if (seen > 0) {
-                celebrateLevel.value = newLvl;
-                celebrateRank.value = lvl.value.rank;
-            }
-            localStorage.setItem(key, String(newLvl));
-        }
-    },
-);
+// Called after XP loads (so lifetime is real, not the transient 0). First ever
+// observation just records a baseline (no party); after that, any rise above the
+// stored level celebrates. Using raw===null — not >0 — means a kid's FIRST
+// level-up (1→2) still fires.
+function checkLevelUp() {
+    if (typeof window === 'undefined') return;
+    const info = levelInfo(lifetime.value);
+    const key = `cq-lastlvl-${props.uid}`;
+    const raw = localStorage.getItem(key);
+    if (raw !== null && info.level > Number(raw)) {
+        celebrateLevel.value = info.level;
+        celebrateRank.value = info.rank;
+    }
+    localStorage.setItem(key, String(info.level));
+}
 
 function dueLabel(iso: string | null): string {
     if (!iso) return '';
@@ -246,6 +246,7 @@ async function loadXp() {
     const rows = (data ?? []) as unknown as LedgerRow[];
     history.value = rows;
     myXp.value = rows.reduce((sum, r) => sum + r.delta_cents, 0);
+    checkLevelUp();
 }
 async function loadGuild() {
     try {
