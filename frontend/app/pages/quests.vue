@@ -16,9 +16,26 @@ interface Quest {
 
 const uid = ref<string | null>(null);
 const householdId = ref<string | null>(null);
-const spendable = ref(0);
-const lifetime = ref(0);
+const ledgerRows = ref<{ delta_cents: number; created_at: string }[]>([]);
 const quests = ref<Quest[]>([]);
+
+// Derived from the ledger: spendable balance, lifetime XP (for level), and a
+// recent weekly earning rate (last 4 weeks) that powers the pace calculator.
+const spendable = computed(() =>
+    ledgerRows.value.reduce((s, r) => s + r.delta_cents, 0),
+);
+const lifetime = computed(() =>
+    ledgerRows.value
+        .filter((r) => r.delta_cents > 0)
+        .reduce((s, r) => s + r.delta_cents, 0),
+);
+const weeklyRate = computed(() => {
+    const cutoff = Date.now() - 28 * 24 * 60 * 60 * 1000;
+    const recent = ledgerRows.value.filter(
+        (r) => r.delta_cents > 0 && new Date(r.created_at).getTime() >= cutoff,
+    );
+    return Math.round(recent.reduce((s, r) => s + r.delta_cents, 0) / 4);
+});
 const loading = ref(true);
 const error = ref<string | null>(null);
 const busyId = ref<string | null>(null);
@@ -47,12 +64,16 @@ function progressPct(q: Quest): number {
 function isReady(q: Quest): boolean {
     return spendable.value >= q.target_xp;
 }
+function paceFor(q: Quest) {
+    if (!q.deadline) return null;
+    return pace(q.target_xp, spendable.value, q.deadline, weeklyRate.value);
+}
 
 async function loadAll() {
     loading.value = true;
     error.value = null;
     const [ledRes, qRes] = await Promise.all([
-        supabase.from('ledger_entries').select('delta_cents'),
+        supabase.from('ledger_entries').select('delta_cents, created_at'),
         supabase
             .from('quests')
             .select('id, title, reward, target_xp, status, deadline')
@@ -60,13 +81,11 @@ async function loadAll() {
             .order('created_at', { ascending: false }),
     ]);
     if (ledRes.error) error.value = ledRes.error.message;
-    else {
-        const rows = (ledRes.data ?? []) as { delta_cents: number }[];
-        spendable.value = rows.reduce((s, r) => s + r.delta_cents, 0);
-        lifetime.value = rows
-            .filter((r) => r.delta_cents > 0)
-            .reduce((s, r) => s + r.delta_cents, 0);
-    }
+    else
+        ledgerRows.value = (ledRes.data ?? []) as {
+            delta_cents: number;
+            created_at: string;
+        }[];
     if (qRes.error) error.value = qRes.error.message;
     else quests.value = (qRes.data ?? []) as Quest[];
     loading.value = false;
@@ -226,6 +245,14 @@ onMounted(async () => {
                                 :style="{ width: progressPct(q) + '%' }"
                             />
                         </div>
+                        <p
+                            v-if="paceFor(q) && !isReady(q)"
+                            class="pace"
+                            :class="`pace-${paceFor(q)!.signal}`"
+                        >
+                            <span class="pace-dot" />
+                            {{ paceFor(q)!.message }}
+                        </p>
                         <button
                             class="link"
                             :disabled="busyId === q.id"
@@ -366,6 +393,29 @@ form {
 }
 .fill.full {
     background: #1f9d43;
+}
+.pace {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 0.4rem 0 0;
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+}
+.pace-dot {
+    width: 0.6rem;
+    height: 0.6rem;
+    border-radius: 50%;
+    flex: none;
+}
+.pace-green .pace-dot {
+    background: #0ca30c;
+}
+.pace-yellow .pace-dot {
+    background: #fab219;
+}
+.pace-red .pace-dot {
+    background: #d03b3b;
 }
 .link {
     margin-top: 0.4rem;

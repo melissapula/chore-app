@@ -212,6 +212,11 @@ onMounted(async () => {
                             >🛡️ Guild quest</mfp-button
                         >
                     </NuxtLink>
+                    <NuxtLink to="/requests">
+                        <mfp-button variant="secondary"
+                            >💬 Chore ideas</mfp-button
+                        >
+                    </NuxtLink>
                 </template>
                 <template v-else>
                     <NuxtLink to="/board">
@@ -227,6 +232,11 @@ onMounted(async () => {
                     <NuxtLink to="/guild">
                         <mfp-button variant="secondary"
                             >🛡️ Guild quest</mfp-button
+                        >
+                    </NuxtLink>
+                    <NuxtLink to="/requests">
+                        <mfp-button variant="secondary"
+                            >💬 Request a chore</mfp-button
                         >
                     </NuxtLink>
                 </template>

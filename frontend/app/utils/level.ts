@@ -1,6 +1,7 @@
 // Lifetime level (SPEC §4d): derived from lifetime XP ever earned (sum of
 // positive ledger deltas), never drops when a kid spends. Rising thresholds —
-// each level costs 50 XP more than the last (L1→L2 = 100, L2→L3 = 150, …).
+// L1→L2 costs 100 XP, and each level after costs 10% more than the last
+// (100, 110, 121, 133, …), so leveling gets gradually harder.
 
 export interface LevelInfo {
     level: number;
@@ -18,12 +19,12 @@ export function levelInfo(lifetimeXp: number): LevelInfo {
     const xp = Math.max(0, lifetimeXp);
     let level = 1;
     let lo = 0; // cumulative XP to reach this level
-    let inc = 100; // XP from this level to the next
+    let inc = 100; // XP from this level to the next (L1→L2 = 100)
     let hi = lo + inc; // cumulative XP to reach the next level
     while (xp >= hi) {
         level++;
         lo = hi;
-        inc += 50;
+        inc = Math.round(inc * 1.1); // each level costs 10% more than the last
         hi = lo + inc;
     }
     const span = hi - lo;
