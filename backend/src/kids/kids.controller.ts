@@ -1,9 +1,18 @@
-import { Body, Controller, Post, UseGuards } from '@nestjs/common';
+import {
+    Body,
+    Controller,
+    Param,
+    ParseUUIDPipe,
+    Patch,
+    Post,
+    UseGuards,
+} from '@nestjs/common';
 import { SupabaseAuthGuard } from '../auth/supabase-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { AuthUser } from '../auth/auth-user.interface';
 import { KidsService } from './kids.service';
 import { CreateKidDto } from './dto/create-kid.dto';
+import { UpdateKidDto } from './dto/update-kid.dto';
 
 @Controller('kids')
 @UseGuards(SupabaseAuthGuard)
@@ -14,5 +23,15 @@ export class KidsController {
     @Post()
     create(@CurrentUser() user: AuthUser, @Body() dto: CreateKidDto) {
         return this.kids.create(user, dto);
+    }
+
+    /** parent → edit a kid's name / login / avatar. */
+    @Patch(':id')
+    update(
+        @CurrentUser() user: AuthUser,
+        @Param('id', ParseUUIDPipe) id: string,
+        @Body() dto: UpdateKidDto,
+    ) {
+        return this.kids.update(user, id, dto);
     }
 }

@@ -141,6 +141,74 @@ const created = ref<{
     pin: string;
 } | null>(null);
 
+// edit-kid state (inline)
+const editKidId = ref<string | null>(null);
+const editName = ref('');
+const editUsername = ref('');
+const editPin = ref('');
+const editAvatar = ref<AvatarValue | null>(null);
+const editAvatarOpen = ref(false);
+const savingKid = ref(false);
+
+function startEditKid(m: Member) {
+    editKidId.value = m.id;
+    editName.value = m.display_name;
+    editUsername.value = m.username ?? '';
+    editPin.value = '';
+    editAvatar.value = m.avatar_url
+        ? { kind: 'image', dataUrl: m.avatar_url }
+        : m.avatar_emoji
+          ? { kind: 'emoji', emoji: m.avatar_emoji }
+          : null;
+    error.value = null;
+}
+function cancelEditKid() {
+    editKidId.value = null;
+}
+async function saveKid() {
+    if (!editKidId.value) return;
+    error.value = null;
+    const name = editName.value.trim();
+    const uname = editUsername.value.trim().toLowerCase();
+    if (!name) {
+        error.value = 'Give your kid a name.';
+        return;
+    }
+    if (!/^[a-z0-9_-]{2,20}$/.test(uname)) {
+        error.value =
+            'Username must be 2–20 characters: letters, numbers, _ or -.';
+        return;
+    }
+    if (editPin.value && !/^\d{4,8}$/.test(editPin.value.trim())) {
+        error.value = 'PIN must be 4–8 digits (or leave it blank to keep it).';
+        return;
+    }
+    savingKid.value = true;
+    const body: Record<string, unknown> = {
+        display_name: name,
+        username: uname,
+    };
+    if (editPin.value.trim()) body.pin = editPin.value.trim();
+    if (editAvatar.value?.kind === 'emoji') {
+        body.avatar_emoji = editAvatar.value.emoji;
+        body.avatar_url = null;
+    } else if (editAvatar.value?.kind === 'image') {
+        body.avatar_emoji = null;
+        body.avatar_url = editAvatar.value.dataUrl;
+    }
+    try {
+        await authFetch(`/kids/${editKidId.value}`, {
+            method: 'PATCH',
+            body,
+        });
+        editKidId.value = null;
+        await loadMembers();
+    } catch (e) {
+        error.value = apiMessage(e);
+    }
+    savingKid.value = false;
+}
+
 const kids = computed(() => members.value.filter((m) => m.role === 'kid'));
 const parents = computed(() =>
     members.value.filter((m) => m.role === 'parent'),
@@ -441,6 +509,18 @@ onMounted(async () => {
                         <span class="kid-xp"
                             >⭐ {{ xpByKid[m.id] || 0 }} XP</span
                         >
+                        <button
+                            class="edit-btn"
+                            aria-label="Edit kid"
+                            title="Edit"
+                            @click="
+                                editKidId === m.id
+                                    ? cancelEditKid()
+                                    : startEditKid(m)
+                            "
+                        >
+                            ✏️
+                        </button>
                         <mfp-button
                             variant="ghost"
                             @click="
@@ -451,6 +531,76 @@ onMounted(async () => {
                         >
                             {{ adjustingId === m.id ? 'Close' : 'Adjust' }}
                         </mfp-button>
+                    </div>
+
+                    <!-- Inline edit: name / login / avatar -->
+                    <div v-if="editKidId === m.id" class="kid-edit">
+                        <mfp-input
+                            label="Name"
+                            name="editName"
+                            :value.prop="editName"
+                            @input="
+                                editName = ($event.target as HTMLInputElement)
+                                    .value
+                            "
+                        />
+                        <mfp-input
+                            label="Username"
+                            name="editUsername"
+                            autocapitalize="none"
+                            :value.prop="editUsername"
+                            @input="
+                                editUsername = (
+                                    $event.target as HTMLInputElement
+                                ).value
+                            "
+                        />
+                        <mfp-input
+                            label="Reset PIN (leave blank to keep)"
+                            name="editPin"
+                            type="text"
+                            inputmode="numeric"
+                            placeholder="••••"
+                            :value.prop="editPin"
+                            @input="
+                                editPin = ($event.target as HTMLInputElement)
+                                    .value
+                            "
+                        />
+                        <div class="avatar-field">
+                            <span class="avatar-label">Avatar</span>
+                            <div class="avatar-row">
+                                <span class="avatar-preview">
+                                    <img
+                                        v-if="editAvatar?.kind === 'image'"
+                                        :src="editAvatar.dataUrl"
+                                        alt="Kid avatar"
+                                    />
+                                    <template v-else>{{
+                                        editAvatar?.emoji || '🙂'
+                                    }}</template>
+                                </span>
+                                <mfp-button
+                                    type="button"
+                                    variant="secondary"
+                                    @click="editAvatarOpen = true"
+                                >
+                                    Change avatar
+                                </mfp-button>
+                            </div>
+                        </div>
+                        <div class="edit-actions">
+                            <mfp-button
+                                variant="primary"
+                                :disabled="savingKid"
+                                @click="saveKid"
+                            >
+                                {{ savingKid ? 'Saving…' : 'Save changes' }}
+                            </mfp-button>
+                            <mfp-button variant="ghost" @click="cancelEditKid">
+                                Cancel
+                            </mfp-button>
+                        </div>
                     </div>
 
                     <!-- Inline adjuster: give a bonus or dock XP (parent_adjustment) -->
@@ -515,6 +665,7 @@ onMounted(async () => {
         </section>
 
         <AvatarPickerModal v-model:open="avatarPickerOpen" v-model="avatar" />
+        <AvatarPickerModal v-model:open="editAvatarOpen" v-model="editAvatar" />
     </main>
 </template>
 
@@ -648,6 +799,26 @@ form {
 .kid-row {
     display: flex;
     flex-direction: column;
+    gap: 0.5rem;
+}
+.edit-btn {
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-size: 1.1rem;
+    padding: 0.2rem;
+    line-height: 1;
+}
+.kid-edit {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    border-radius: var(--radius-md, 0.75rem);
+    background: var(--color-brand-subtle, #efe7ff);
+}
+.edit-actions {
+    display: flex;
     gap: 0.5rem;
 }
 .kid-xp {

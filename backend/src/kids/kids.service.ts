@@ -9,6 +9,7 @@ import { SupabaseService } from '../supabase/supabase.service';
 import { AuthUser } from '../auth/auth-user.interface';
 import { DbResult } from '../db-types';
 import { CreateKidDto } from './dto/create-kid.dto';
+import { UpdateKidDto } from './dto/update-kid.dto';
 import { kidEmail, kidPassword } from './kid-auth';
 
 /** The kid row we return to the parent (no credentials). */
@@ -97,5 +98,92 @@ export class KidsService {
         }
 
         return profile;
+    }
+
+    /**
+     * Edit a kid (parent). Profile fields update the chore.users row; a new
+     * username/PIN also updates the derived Auth email/password via the admin API.
+     */
+    async update(
+        parent: AuthUser,
+        kidId: string,
+        dto: UpdateKidDto,
+    ): Promise<KidRow> {
+        if (parent.role !== 'parent') {
+            throw new ForbiddenException('Only a parent can edit a kid');
+        }
+        const service = this.supabase.serviceClient();
+
+        // The target must be a kid in the caller's own household.
+        const { data: kid } = (await service
+            .from('users')
+            .select('id, household_id, role, username')
+            .eq('id', kidId)
+            .maybeSingle()) as DbResult<{
+            id: string;
+            household_id: string;
+            role: string;
+            username: string | null;
+        }>;
+        if (
+            !kid ||
+            kid.household_id !== parent.householdId ||
+            kid.role !== 'kid'
+        ) {
+            throw new ForbiddenException('That kid is not in your household');
+        }
+
+        // Auth changes first (a failure here shouldn't leave the profile ahead).
+        const newUsername = dto.username?.trim().toLowerCase();
+        if (newUsername && newUsername !== kid.username) {
+            const { error } = await service.auth.admin.updateUserById(kidId, {
+                email: kidEmail(newUsername),
+            });
+            if (error) {
+                if (/already|registered|exist/i.test(error.message)) {
+                    throw new ConflictException(
+                        'That username is already taken',
+                    );
+                }
+                throw new BadRequestException(error.message);
+            }
+        }
+        if (dto.pin) {
+            const { error } = await service.auth.admin.updateUserById(kidId, {
+                password: kidPassword(dto.pin),
+            });
+            if (error) throw new BadRequestException(error.message);
+        }
+
+        // Profile fields (only what was sent).
+        const patch: Record<string, unknown> = {};
+        if (dto.display_name !== undefined)
+            patch.display_name = dto.display_name.trim();
+        if (newUsername !== undefined) patch.username = newUsername;
+        if (dto.avatar_emoji !== undefined)
+            patch.avatar_emoji = dto.avatar_emoji;
+        if (dto.avatar_url !== undefined) patch.avatar_url = dto.avatar_url;
+
+        if (Object.keys(patch).length) {
+            const { error } = await service
+                .from('users')
+                .update(patch)
+                .eq('id', kidId);
+            if (error) throw new BadRequestException(error.message);
+        }
+
+        const { data: updated, error: readErr } = (await service
+            .from('users')
+            .select(
+                'id, display_name, username, role, avatar_emoji, avatar_url',
+            )
+            .eq('id', kidId)
+            .single()) as DbResult<KidRow>;
+        if (readErr || !updated) {
+            throw new BadRequestException(
+                readErr?.message ?? 'Could not load the updated kid',
+            );
+        }
+        return updated;
     }
 }
