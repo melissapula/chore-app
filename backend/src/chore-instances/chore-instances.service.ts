@@ -139,7 +139,7 @@ export class ChoreInstancesService {
             void this.push.notifyUsers([data.claimed_by], {
                 title: 'Chore approved! 🎉',
                 body: `You earned ${data.value_cents_snapshot} XP.`,
-                url: '/board',
+                url: '/dashboard',
             });
         }
         return data;
@@ -262,7 +262,7 @@ export class ChoreInstancesService {
             void this.push.notifyUsers([updated.assigned_to], {
                 title: 'Chore confirmed ✅',
                 body: `${inst.chores.title} is all done. Nice work!`,
-                url: '/board',
+                url: '/dashboard',
             });
         }
         return updated;

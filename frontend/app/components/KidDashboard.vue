@@ -87,7 +87,7 @@ const loading = ref(true);
 const error = ref<string | null>(null);
 const busyId = ref<string | null>(null);
 const openNotes = ref<string | null>(null);
-const now = ref<number>(0);
+const now = ref<number>(Date.now());
 
 let clock: ReturnType<typeof setInterval> | null = null;
 let poller: ReturnType<typeof setInterval> | null = null;

@@ -93,11 +93,15 @@ onMounted(async () => {
         navigateTo('/login');
         return;
     }
-    const { data: me } = await supabase
+    const { data: me, error: meErr } = await supabase
         .from('users')
         .select('role')
         .eq('id', data.user.id)
         .maybeSingle();
+    if (meErr) {
+        error.value = meErr.message;
+        return;
+    }
     if ((me as { role?: string } | null)?.role !== 'parent') {
         navigateTo('/dashboard');
         return;
@@ -123,9 +127,7 @@ onMounted(async () => {
                         <strong>{{ guild.quest.title }}</strong>
                         <span class="g-num"
                             >{{ guild.progress.toLocaleString() }} /
-                            {{
-                                guild.quest.target_xp.toLocaleString()
-                            }}
+                            {{ guild.quest.target_xp.toLocaleString() }}
                             XP</span
                         >
                     </div>

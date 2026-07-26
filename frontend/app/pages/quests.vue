@@ -30,11 +30,22 @@ const lifetime = computed(() =>
         .reduce((s, r) => s + r.delta_cents, 0),
 );
 const weeklyRate = computed(() => {
-    const cutoff = Date.now() - 28 * 24 * 60 * 60 * 1000;
+    const week = 7 * 24 * 60 * 60 * 1000;
+    const cutoff = Date.now() - 4 * week;
     const recent = ledgerRows.value.filter(
         (r) => r.delta_cents > 0 && new Date(r.created_at).getTime() >= cutoff,
     );
-    return Math.round(recent.reduce((s, r) => s + r.delta_cents, 0) / 4);
+    if (!recent.length) return 0;
+    // Divide by the weeks actually elapsed (1–4), so a brand-new account isn't
+    // averaged over a full 4 weeks and under-reported ~4× (audit Low).
+    const earliest = Math.min(
+        ...recent.map((r) => new Date(r.created_at).getTime()),
+    );
+    const weeks = Math.min(
+        4,
+        Math.max(1, Math.ceil((Date.now() - earliest) / week)),
+    );
+    return Math.round(recent.reduce((s, r) => s + r.delta_cents, 0) / weeks);
 });
 const loading = ref(true);
 const error = ref<string | null>(null);
@@ -158,7 +169,7 @@ onMounted(async () => {
 
 <template>
     <main class="wrap">
-        <p class="back"><NuxtLink to="/board">← Quest Board</NuxtLink></p>
+        <p class="back"><NuxtLink to="/dashboard">← Dashboard</NuxtLink></p>
         <h1>🎁 My quests</h1>
 
         <mfp-alert v-if="error" variant="error">{{ error }}</mfp-alert>

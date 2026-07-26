@@ -80,7 +80,8 @@ export default defineNuxtConfig({
         manifest: {
             name: 'ChoreQuest',
             short_name: 'ChoreQuest',
-            description: 'Family chores, virtual balances, and savings goals.',
+            description:
+                'Family chores as quests — earn XP, level up, and save toward rewards.',
             theme_color: '#6c4ce0',
             background_color: '#fffdfa',
             display: 'standalone',

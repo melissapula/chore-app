@@ -6,7 +6,7 @@ const user = useSupabaseUser();
 <template>
     <main class="wrap">
         <h1>⚔️ ChoreQuest</h1>
-        <p>Family chores, virtual balances, and savings goals.</p>
+        <p>Family chores as quests — earn XP, level up, save toward rewards.</p>
         <div class="actions">
             <NuxtLink v-if="!user" to="/login">
                 <mfp-button variant="primary">Log in</mfp-button>

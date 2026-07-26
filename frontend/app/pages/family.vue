@@ -413,11 +413,17 @@ onMounted(async () => {
         return;
     }
     uid.value = data.user.id;
-    const { data: me } = await supabase
+    const { data: me, error: meErr } = await supabase
         .from('users')
         .select('role, household_id')
         .eq('id', uid.value)
         .maybeSingle();
+    if (meErr) {
+        // Don't bounce a real parent to /dashboard on a transient error.
+        error.value = meErr.message;
+        loading.value = false;
+        return;
+    }
     const meRow = me as { role?: string; household_id?: string } | null;
     isParent.value = meRow?.role === 'parent';
     householdId.value = meRow?.household_id ?? null;
