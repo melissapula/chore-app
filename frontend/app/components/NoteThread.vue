@@ -212,6 +212,12 @@ onMounted(async () => {
 .emoji {
     font-size: 1.1rem;
     line-height: 1;
+    /* ≥44px tap target for touch (phone-first PWA). */
+    min-width: 44px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     padding: 0.3rem 0.45rem;
     border: 1px solid var(--color-surface-muted, #e6e0f5);
     border-radius: 999px;

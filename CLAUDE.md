@@ -243,6 +243,14 @@ The gate is computed **live** (no end-of-week cron yet): per kid, count their
 - **State transitions are server-side and validated.** A transition checks the
   current state before writing the next one (no illegal jumps).
 - **Update `SPEC.md` in the same commit when you change behavior.** The spec leads.
+- **Phone-first — keep it mobile-friendly.** The app is used mostly on phones (an
+  installable PWA). Pages use `.wrap { max-width: ~32rem; padding: 0 1rem }` so they
+  reflow to phone width with no horizontal scroll — never let a page overflow at
+  360px. Tappable controls need a ≥44×44px hit area; small icon buttons
+  (`.notes-toggle` / `.edit-btn`) + nav `.tab`s get topped up to 44px by a global
+  rule in `theme-playful.css` (it only sets min-size/display/alignment, so it
+  layers on scoped styles without `!important` — keep control class names in sync
+  there). Mobile/PWA `<meta>` (theme-color, apple-*) lives in `nuxt.config` `app.head`.
 - **Pre-commit hook (husky + lint-staged).** On commit, `.husky/pre-commit` runs
   lint-staged inside `backend/` and `frontend/` separately (monorepo — each uses
   its own ESLint config + binaries). Staged code gets `eslint --fix` + `prettier

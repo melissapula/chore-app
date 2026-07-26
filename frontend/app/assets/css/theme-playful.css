@@ -73,3 +73,36 @@
     --font-family-sans:
         'Nunito', 'Baloo 2', system-ui, -apple-system, sans-serif;
 }
+
+/*
+ * ---- Mobile touch targets ----
+ * ChoreQuest ships phone-first (installable PWA — SPEC §1), so every tappable
+ * control needs a finger-sized hit area (≥44×44, per Apple HIG / Material). The
+ * small icon buttons (✏️ edit, 💬 notes, 🗑️ remove) and nav tabs get their box
+ * from scoped component styles that only set font-size + a little padding
+ * (~31×24). These global top-ups only set properties those scoped rules DON'T
+ * (min-size / display / alignment), so they layer on without !important and
+ * without touching nine component files. Keep control class names in sync here.
+ */
+.notes-toggle,
+.edit-btn {
+    min-width: 44px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.tab {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* The "← Dashboard" back link sits alone top-left — give it a tappable row. */
+.back a {
+    display: inline-block;
+    padding: 0.6rem 0.2rem;
+    margin-left: -0.2rem;
+}

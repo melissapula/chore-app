@@ -962,7 +962,9 @@ form {
 .item {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
+    /* Tight gap: the kid row packs avatar + name + XP + edit + Adjust, which
+       must stay on one line at 360px-wide phones. */
+    gap: 0.5rem;
     padding: 0.5rem;
     border-radius: var(--radius-md, 0.75rem);
     background: var(--color-surface-muted, #f5f3f7);

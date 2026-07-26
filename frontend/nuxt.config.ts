@@ -21,6 +21,22 @@ export default defineNuxtConfig({
 
     app: {
         head: {
+            // Phone-first PWA: color the browser chrome to match the brand and
+            // let iOS run it fullscreen when added to the home screen. (The
+            // manifest carries theme_color too, but this <meta> also styles the
+            // address bar before install.)
+            meta: [
+                { name: 'theme-color', content: '#6c4ce0' },
+                { name: 'mobile-web-app-capable', content: 'yes' },
+                { name: 'apple-mobile-web-app-capable', content: 'yes' },
+                {
+                    name: 'apple-mobile-web-app-status-bar-style',
+                    content: 'default',
+                },
+                { name: 'apple-mobile-web-app-title', content: 'ChoreQuest' },
+                // Stop iOS auto-linking numbers (XP totals, PINs) as phone links.
+                { name: 'format-detection', content: 'telephone=no' },
+            ],
             link: [
                 // Rounded, kid-legible font used by the playful theme.
                 { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
