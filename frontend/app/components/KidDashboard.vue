@@ -24,6 +24,7 @@ interface Instance {
     due_date: string | null;
     chores: {
         title: string;
+        quest_title: string | null;
         icon_emoji: string | null;
         chore_type: string;
         est_minutes: number | null;
@@ -31,13 +32,22 @@ interface Instance {
         eligible_kid_ids: string[] | null;
     } | null;
 }
+
+// §4: kids see the gamified name; fall back to the plain title.
+function choreLabel(c: Instance['chores']): string {
+    return c?.quest_title || c?.title || 'Chore';
+}
 interface LedgerRow {
     delta_cents: number;
     reason: string;
     note: string | null;
     created_at: string;
     chore_instances: {
-        chores: { title: string; icon_emoji: string | null } | null;
+        chores: {
+            title: string;
+            quest_title: string | null;
+            icon_emoji: string | null;
+        } | null;
     } | null;
 }
 interface Contribution {
@@ -190,7 +200,7 @@ async function loadXp() {
     const { data, error: err } = await supabase
         .from('ledger_entries')
         .select(
-            'delta_cents, reason, note, created_at, chore_instances(chores(title, icon_emoji))',
+            'delta_cents, reason, note, created_at, chore_instances(chores(title, quest_title, icon_emoji))',
         )
         .order('created_at', { ascending: false });
     if (err) {
@@ -225,7 +235,7 @@ function makePlan() {
     }
     const items: BundleItem[] = upForGrabs.value.map((i) => ({
         id: i.id,
-        title: i.chores?.title ?? 'Chore',
+        title: choreLabel(i.chores),
         icon: i.chores?.icon_emoji ?? null,
         xp: i.value_cents_snapshot,
         minutes: i.chores?.est_minutes ?? 0,
@@ -381,7 +391,7 @@ onUnmounted(() => {
                             i.chores?.icon_emoji || '📋'
                         }}</span>
                         <span class="grow">
-                            <strong>{{ i.chores?.title || 'Chore' }}</strong>
+                            <strong>{{ choreLabel(i.chores) }}</strong>
                             <span
                                 v-if="i.state === 'ASSIGNED'"
                                 class="tag"
@@ -440,9 +450,7 @@ onUnmounted(() => {
                                 i.chores?.icon_emoji || '📋'
                             }}</span>
                             <span class="grow">
-                                <strong>{{
-                                    i.chores?.title || 'Chore'
-                                }}</strong>
+                                <strong>{{ choreLabel(i.chores) }}</strong>
                                 <span class="xp"
                                     >{{ i.value_cents_snapshot }} XP</span
                                 >
@@ -526,7 +534,7 @@ onUnmounted(() => {
                             i.chores?.icon_emoji || '📋'
                         }}</span>
                         <span class="grow">
-                            <strong>{{ i.chores?.title || 'Chore' }}</strong>
+                            <strong>{{ choreLabel(i.chores) }}</strong>
                             <span class="xp"
                                 >{{ i.value_cents_snapshot }} XP</span
                             >
@@ -616,7 +624,7 @@ onUnmounted(() => {
                             i.chores?.icon_emoji || '📋'
                         }}</span>
                         <span class="grow">
-                            <strong>{{ i.chores?.title || 'Chore' }}</strong>
+                            <strong>{{ choreLabel(i.chores) }}</strong>
                             <span class="xp"
                                 >+{{ i.value_cents_snapshot }} XP</span
                             >
@@ -637,6 +645,7 @@ onUnmounted(() => {
                         }}</span>
                         <span class="grow">
                             <strong>{{
+                                h.chore_instances?.chores?.quest_title ||
                                 h.chore_instances?.chores?.title ||
                                 REASON_LABEL[h.reason] ||
                                 'XP'

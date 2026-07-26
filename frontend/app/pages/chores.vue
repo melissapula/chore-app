@@ -11,6 +11,7 @@ const supabase = useSupabaseClient();
 interface Chore {
     id: string;
     title: string;
+    quest_title: string | null;
     icon_emoji: string | null;
     chore_type: 'paid' | 'required';
     value_cents: number;
@@ -67,7 +68,8 @@ const archivedTemplates = computed(() =>
 
 // new-chore form
 const choreType = ref<'paid' | 'required'>('paid');
-const title = ref('');
+const title = ref(''); // plain, canonical name (lists + search)
+const questTitle = ref(''); // §4 gamified name kids see (optional)
 const emoji = ref('');
 const xp = ref<number | null>(null);
 const isCustom = ref(false); // paid: chose "Create a custom chore" → editable name
@@ -84,6 +86,7 @@ const creating = ref(false);
 const editId = ref<string | null>(null);
 const editType = ref<'paid' | 'required'>('paid');
 const editTitle = ref('');
+const editQuestTitle = ref('');
 const editEmoji = ref('');
 const editXp = ref<number | null>(null);
 const editAssignee = ref('');
@@ -140,13 +143,23 @@ function youngAffected(
 }
 
 // Fill the paid form from a picked preset (gamified chore, or a custom one).
+// SPEC §4: store the PLAIN name as title (canonical/search) and the gamified
+// name as quest_title (what kids see). For a custom chore the parent types one
+// name (title); they can add a fun name separately.
 function onPreset(p: {
-    title: string;
+    title: string; // gamified (preset) or the typed name (custom)
+    plain: string; // plain/canonical
     emoji: string;
     xp: number;
     custom?: boolean;
 }) {
-    title.value = p.title;
+    if (p.custom) {
+        title.value = p.title;
+        questTitle.value = '';
+    } else {
+        title.value = p.plain;
+        questTitle.value = p.title;
+    }
     emoji.value = p.emoji || '';
     xp.value = p.xp || null;
     isCustom.value = !!p.custom;
@@ -160,6 +173,7 @@ function switchType(t: 'paid' | 'required') {
     choreType.value = t;
     // Reset shared fields so a paid preset doesn't bleed into a required chore.
     title.value = '';
+    questTitle.value = '';
     emoji.value = '';
     xp.value = null;
     isCustom.value = false;
@@ -242,6 +256,7 @@ async function createChore() {
             choreType.value === 'paid'
                 ? {
                       title: title.value.trim(),
+                      quest_title: questTitle.value.trim() || undefined,
                       chore_type: 'paid' as const,
                       icon_emoji: emoji.value.trim() || undefined,
                       value_cents:
@@ -251,6 +266,7 @@ async function createChore() {
                   }
                 : {
                       title: title.value.trim(),
+                      quest_title: questTitle.value.trim() || undefined,
                       chore_type: 'required' as const,
                       icon_emoji: emoji.value.trim() || undefined,
                       assigned_kid_id: assignedKid.value,
@@ -260,6 +276,7 @@ async function createChore() {
                   };
         await authFetch<Chore>('/chores', { method: 'POST', body });
         title.value = '';
+        questTitle.value = '';
         emoji.value = '';
         xp.value = null;
         isCustom.value = false;
@@ -280,6 +297,7 @@ function startEdit(c: Chore) {
     editId.value = c.id;
     editType.value = c.chore_type;
     editTitle.value = c.title;
+    editQuestTitle.value = c.quest_title ?? '';
     editEmoji.value = c.icon_emoji ?? '';
     editXp.value = c.value_cents || null;
     editAssignee.value = c.assigned_kid_id ?? '';
@@ -326,6 +344,7 @@ async function saveEdit() {
             editType.value === 'paid'
                 ? {
                       title: editTitle.value.trim(),
+                      quest_title: editQuestTitle.value.trim() || null,
                       icon_emoji: editEmoji.value.trim() || undefined,
                       value_cents:
                           editXp.value && editXp.value > 0
@@ -336,6 +355,7 @@ async function saveEdit() {
                   }
                 : {
                       title: editTitle.value.trim(),
+                      quest_title: editQuestTitle.value.trim() || null,
                       icon_emoji: editEmoji.value.trim() || undefined,
                       assigned_kid_id: editAssignee.value,
                       due_type: editDue.value,
@@ -479,21 +499,38 @@ onUnmounted(() => {
                 <template v-if="choreType === 'paid'">
                     <ChorePicker @select="onPreset" />
 
-                    <!-- Custom chore → name it yourself -->
-                    <mfp-input
-                        v-if="isCustom"
-                        label="Chore name"
-                        name="customTitle"
-                        placeholder="Name your chore"
-                        :value.prop="title"
-                        @input="
-                            title = ($event.target as HTMLInputElement).value
-                        "
-                    />
-                    <!-- Preset → show the gamified name -->
+                    <!-- Custom chore → name it yourself (+ optional fun name) -->
+                    <template v-if="isCustom">
+                        <mfp-input
+                            label="Chore name"
+                            name="customTitle"
+                            placeholder="Name your chore"
+                            :value.prop="title"
+                            @input="
+                                title = ($event.target as HTMLInputElement)
+                                    .value
+                            "
+                        />
+                        <mfp-input
+                            label="Fun name kids see (optional)"
+                            name="customQuestTitle"
+                            placeholder="Defeat the dish goblins"
+                            :value.prop="questTitle"
+                            @input="
+                                questTitle = ($event.target as HTMLInputElement)
+                                    .value
+                            "
+                        />
+                    </template>
+                    <!-- Preset → the fun name kids see, plain name beneath -->
                     <div v-else-if="title" class="chosen">
                         <span class="chosen-emoji">{{ emoji || '📋' }}</span>
-                        <strong>{{ title }}</strong>
+                        <span class="chosen-names">
+                            <strong>{{ questTitle || title }}</strong>
+                            <span v-if="questTitle" class="chosen-plain">{{
+                                title
+                            }}</span>
+                        </span>
                     </div>
 
                     <div v-if="isCustom || title" class="row">
@@ -695,6 +732,16 @@ onUnmounted(() => {
                             @input="
                                 editTitle = ($event.target as HTMLInputElement)
                                     .value
+                            "
+                        />
+                        <mfp-input
+                            label="Fun name kids see (optional)"
+                            name="editQuestTitle"
+                            :value.prop="editQuestTitle"
+                            @input="
+                                editQuestTitle = (
+                                    $event.target as HTMLInputElement
+                                ).value
                             "
                         />
                         <div class="row">
@@ -1125,6 +1172,15 @@ form {
 }
 .chosen-emoji {
     font-size: 1.5rem;
+}
+.chosen-names {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.2;
+}
+.chosen-plain {
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
 }
 .emoji-in {
     width: 5rem;

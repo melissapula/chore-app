@@ -20,6 +20,12 @@ export class UpdateChoreDto {
     @IsString()
     title?: string;
 
+    // §4 gamified name (null clears it → kids see the plain title).
+    @IsOptional()
+    @ValidateIf((_o, v) => v !== null)
+    @IsString()
+    quest_title?: string | null;
+
     @IsOptional()
     @IsString()
     icon_emoji?: string;

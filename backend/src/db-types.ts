@@ -19,6 +19,7 @@ export interface ChoreRow {
     id: string;
     household_id: string;
     title: string;
+    quest_title: string | null;
     icon_emoji: string | null;
     chore_type: 'paid' | 'required';
     value_cents: number;
@@ -60,6 +61,7 @@ export interface ChoreInstanceRow {
 export interface InstanceListRow extends ChoreInstanceRow {
     chores: {
         title: string;
+        quest_title: string | null;
         icon_emoji: string | null;
         chore_type: string;
         est_minutes: number | null;

@@ -20,6 +20,11 @@ export class CreateChoreDto {
     @IsNotEmpty()
     title!: string;
 
+    // §4 gamified name kids see; falls back to title.
+    @IsOptional()
+    @IsString()
+    quest_title?: string;
+
     @IsIn(['paid', 'required'])
     chore_type!: 'paid' | 'required';
 

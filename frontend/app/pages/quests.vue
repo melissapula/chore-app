@@ -210,6 +210,22 @@ onMounted(async () => {
                                 ) || null
                         "
                     />
+                    <mfp-input
+                        label="Reward (optional)"
+                        name="reward"
+                        placeholder="What a grown-up gives you"
+                        :value.prop="reward"
+                        @input="
+                            reward = ($event.target as HTMLInputElement).value
+                        "
+                    />
+                    <label class="date-field">
+                        <span class="date-label">Finish by (optional)</span>
+                        <input v-model="deadline" type="date" class="date-in" />
+                        <span class="muted small"
+                            >Adds a weekly pace to help you stay on track.</span
+                        >
+                    </label>
                     <mfp-button
                         type="submit"
                         variant="primary"
@@ -353,6 +369,24 @@ form {
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
+}
+.date-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+.date-label {
+    font-weight: 700;
+    font-size: 0.9rem;
+}
+.date-in {
+    padding: 0.6rem 0.5rem;
+    border: 2px solid var(--color-surface-muted, #e6e0f5);
+    border-radius: var(--radius-md, 0.75rem);
+    background: var(--color-surface, #fff);
+    font: inherit;
+    color: var(--color-text-default);
+    max-width: 12rem;
 }
 .list {
     list-style: none;
