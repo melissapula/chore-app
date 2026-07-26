@@ -8,6 +8,7 @@ const supabase = useSupabaseClient();
 interface Quest {
     id: string;
     title: string;
+    emoji: string | null;
     reward: string | null;
     target_xp: number;
     status: string;
@@ -53,6 +54,7 @@ const busyId = ref<string | null>(null);
 
 // create form
 const title = ref('');
+const questEmoji = ref('');
 const reward = ref('');
 const target = ref<number | null>(null);
 const deadline = ref('');
@@ -87,7 +89,7 @@ async function loadAll() {
         supabase.from('ledger_entries').select('delta_cents, created_at'),
         supabase
             .from('quests')
-            .select('id, title, reward, target_xp, status, deadline')
+            .select('id, title, emoji, reward, target_xp, status, deadline')
             .eq('scope', 'personal')
             .order('created_at', { ascending: false }),
     ]);
@@ -119,6 +121,7 @@ async function createQuest() {
         kid_id: uid.value,
         scope: 'personal',
         title: title.value.trim(),
+        emoji: questEmoji.value || null,
         reward: reward.value.trim() || null,
         target_xp: Math.round(target.value),
         deadline: deadline.value || null,
@@ -129,6 +132,7 @@ async function createQuest() {
         return;
     }
     title.value = '';
+    questEmoji.value = '';
     reward.value = '';
     target.value = null;
     deadline.value = '';
@@ -179,7 +183,9 @@ onMounted(async () => {
             <!-- Level + spendable -->
             <section class="hero">
                 <div class="level-row">
-                    <span class="lvl-badge">Lv {{ level.level }}</span>
+                    <span class="lvl-badge"
+                        >Lv {{ level.level }} · {{ level.rank }}</span
+                    >
                     <div class="lvl-bar">
                         <div
                             class="lvl-fill"
@@ -207,6 +213,10 @@ onMounted(async () => {
                             title = ($event.target as HTMLInputElement).value
                         "
                     />
+                    <div class="date-field">
+                        <span class="date-label">Pick an icon (optional)</span>
+                        <EmojiField v-model="questEmoji" />
+                    </div>
                     <mfp-input
                         label="XP goal"
                         name="target"
@@ -253,7 +263,11 @@ onMounted(async () => {
                 <ul class="list">
                     <li v-for="q in activeQuests" :key="q.id" class="quest">
                         <div class="quest-head">
-                            <strong>{{ q.title }}</strong>
+                            <strong
+                                ><template v-if="q.emoji"
+                                    >{{ q.emoji }} </template
+                                >{{ q.title }}</strong
+                            >
                             <span
                                 class="q-status"
                                 :class="isReady(q) ? 'ready' : 'saving'"

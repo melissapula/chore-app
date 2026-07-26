@@ -15,6 +15,7 @@ interface Quest {
     id: string;
     kid_id: string;
     title: string;
+    emoji: string | null;
     target_xp: number;
 }
 interface GuildView {
@@ -70,7 +71,7 @@ async function load() {
         supabase.from('ledger_entries').select('kid_id, delta_cents'),
         supabase
             .from('quests')
-            .select('id, kid_id, title, target_xp')
+            .select('id, kid_id, title, emoji, target_xp')
             .eq('scope', 'personal')
             .eq('status', 'active'),
     ]);
@@ -168,7 +169,8 @@ onMounted(async () => {
                 <div class="metric">
                     <div class="metric-head">
                         <span class="lvl-badge"
-                            >Level {{ levelInfo(lifetime(k.id)).level }}</span
+                            >Level {{ levelInfo(lifetime(k.id)).level }} ·
+                            {{ levelInfo(lifetime(k.id)).rank }}</span
                         >
                         <span class="metric-note"
                             >{{ levelInfo(lifetime(k.id)).toNext }} XP to
@@ -196,7 +198,11 @@ onMounted(async () => {
                     <ul v-else class="qlist">
                         <li v-for="q in questsFor(k.id)" :key="q.id">
                             <div class="q-row">
-                                <span class="q-title">{{ q.title }}</span>
+                                <span class="q-title"
+                                    ><template v-if="q.emoji"
+                                        >{{ q.emoji }} </template
+                                    >{{ q.title }}</span
+                                >
                                 <span
                                     class="q-amt"
                                     :class="{

@@ -32,6 +32,7 @@ interface Quest {
     id: string;
     kid_id: string;
     title: string;
+    emoji: string | null;
     reward: string | null;
     target_xp: number;
 }
@@ -41,7 +42,7 @@ const redeemBusy = ref<string | null>(null);
 async function loadQuests() {
     const { data } = await supabase
         .from('quests')
-        .select('id, kid_id, title, reward, target_xp')
+        .select('id, kid_id, title, emoji, reward, target_xp')
         .eq('scope', 'personal')
         .eq('status', 'active');
     const byKid: Record<string, Quest[]> = {};
@@ -855,7 +856,8 @@ onMounted(async () => {
                         class="redeem-row"
                     >
                         <span class="redeem-info">
-                            🎁 <strong>{{ q.title }}</strong>
+                            {{ q.emoji || '🎁' }}
+                            <strong>{{ q.title }}</strong>
                             <span class="redeem-cost"
                                 >{{ q.target_xp }} XP</span
                             >

@@ -5,6 +5,8 @@
 
 export interface LevelInfo {
     level: number;
+    /** Fun RPG rank title for the level (kids remember "I'm a Knight!"). */
+    rank: string;
     /** XP earned into the current level. */
     into: number;
     /** Total XP span of the current level. */
@@ -13,6 +15,26 @@ export interface LevelInfo {
     toNext: number;
     /** 0–100 progress through the current level. */
     pct: number;
+}
+
+// Rising RPG ranks. Levels past the list keep the top title.
+const RANKS = [
+    'Novice', // 1
+    'Helper', // 2
+    'Squire', // 3
+    'Adventurer', // 4
+    'Knight', // 5
+    'Ranger', // 6
+    'Champion', // 7
+    'Hero', // 8
+    'Guardian', // 9
+    'Master', // 10
+    'Legend', // 11
+    'Grandmaster', // 12
+];
+
+export function rankTitle(level: number): string {
+    return RANKS[Math.min(Math.max(1, level), RANKS.length) - 1]!;
 }
 
 export function levelInfo(lifetimeXp: number): LevelInfo {
@@ -31,6 +53,7 @@ export function levelInfo(lifetimeXp: number): LevelInfo {
     const into = xp - lo;
     return {
         level,
+        rank: rankTitle(level),
         into,
         span,
         toNext: hi - xp,

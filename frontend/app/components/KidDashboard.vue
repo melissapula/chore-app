@@ -161,6 +161,41 @@ function seg(i: number): string {
     return `var(--s${(i % 8) + 1})`;
 }
 
+// --- level-up celebration ---
+// Fire confetti when the kid's level rises above the last one we saw (stored per
+// kid). The first load just records a baseline so we don't celebrate on sign-in.
+const celebrateLevel = ref<number | null>(null);
+const celebrateRank = ref('');
+const CONF = ['🎉', '✨', '⭐', '🌟', '🎊', '💫'];
+function rng(n: number): number {
+    return ((n * 9301 + 49297) % 233280) / 233280;
+}
+function confStyle(n: number) {
+    return {
+        left: Math.round(rng(n) * 100) + '%',
+        animationDelay: (rng(n + 7) * 0.9).toFixed(2) + 's',
+        animationDuration: (2 + rng(n + 3) * 1.6).toFixed(2) + 's',
+    };
+}
+function confEmoji(n: number): string {
+    return CONF[n % CONF.length]!;
+}
+watch(
+    () => lvl.value.level,
+    (newLvl) => {
+        if (typeof window === 'undefined') return;
+        const key = `cq-lastlvl-${props.uid}`;
+        const seen = Number(localStorage.getItem(key) || '0');
+        if (newLvl > seen) {
+            if (seen > 0) {
+                celebrateLevel.value = newLvl;
+                celebrateRank.value = lvl.value.rank;
+            }
+            localStorage.setItem(key, String(newLvl));
+        }
+    },
+);
+
 function dueLabel(iso: string | null): string {
     if (!iso) return '';
     const d = new Date(iso);
@@ -314,6 +349,35 @@ onUnmounted(() => {
 
 <template>
     <div class="kid">
+        <!-- Level-up celebration 🎉 -->
+        <div
+            v-if="celebrateLevel"
+            class="celebrate"
+            @click="celebrateLevel = null"
+        >
+            <div class="confetti" aria-hidden="true">
+                <span
+                    v-for="n in 30"
+                    :key="n"
+                    class="conf"
+                    :style="confStyle(n)"
+                    >{{ confEmoji(n) }}</span
+                >
+            </div>
+            <div
+                class="celebrate-card"
+                role="alertdialog"
+                aria-label="Level up"
+            >
+                <div class="celebrate-big">🎉 Level Up! 🎉</div>
+                <div class="celebrate-lvl">Level {{ celebrateLevel }}</div>
+                <div class="celebrate-rank">You're a {{ celebrateRank }}!</div>
+                <mfp-button variant="primary" @click="celebrateLevel = null">
+                    Woohoo!
+                </mfp-button>
+            </div>
+        </div>
+
         <!-- XP + level hero -->
         <div class="xp-hero viz-root">
             <div class="xp-main">
@@ -323,7 +387,9 @@ onUnmounted(() => {
                 <NuxtLink to="/quests" class="quests-link">🎁 Rewards</NuxtLink>
             </div>
             <div class="lvl-row">
-                <span class="lvl-badge">Lv {{ lvl.level }}</span>
+                <span class="lvl-badge"
+                    >Lv {{ lvl.level }} · {{ lvl.rank }}</span
+                >
                 <div class="lvl-bar">
                     <div class="lvl-fill" :style="{ width: lvl.pct + '%' }" />
                 </div>
@@ -766,6 +832,68 @@ onUnmounted(() => {
     padding: 1rem 0;
 }
 /* hero */
+.celebrate {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(43, 35, 80, 0.45);
+    cursor: pointer;
+}
+.confetti {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+}
+.conf {
+    position: absolute;
+    top: -2.5rem;
+    font-size: 1.5rem;
+    animation: cq-fall linear forwards;
+}
+@keyframes cq-fall {
+    to {
+        transform: translateY(110vh) rotate(720deg);
+        opacity: 0.85;
+    }
+}
+.celebrate-card {
+    position: relative;
+    background: var(--color-surface, #fff);
+    border-radius: var(--radius-lg, 1.25rem);
+    padding: 1.5rem 2rem;
+    text-align: center;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+    animation: cq-pop 0.3s ease;
+}
+@keyframes cq-pop {
+    from {
+        transform: scale(0.8);
+        opacity: 0;
+    }
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+.celebrate-big {
+    font-weight: 800;
+    font-size: 1.25rem;
+}
+.celebrate-lvl {
+    font-family: 'Baloo 2', var(--font-family-sans);
+    font-size: 2.5rem;
+    line-height: 1.1;
+    color: var(--color-brand-primary, #6c4ce0);
+}
+.celebrate-rank {
+    font-weight: 700;
+    font-size: 1.1rem;
+    margin-bottom: 1rem;
+}
 .xp-hero {
     margin: 0.5rem 0 1rem;
     padding: 1rem;
