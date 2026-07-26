@@ -197,6 +197,11 @@ onMounted(async () => {
                 <NuxtLink to="/chores">
                     <mfp-button variant="primary">⚔️ Manage chores</mfp-button>
                 </NuxtLink>
+                <NuxtLink to="/progress">
+                    <mfp-button variant="secondary"
+                        >📊 Kids' progress</mfp-button
+                    >
+                </NuxtLink>
                 <NuxtLink to="/family">
                     <mfp-button variant="secondary">👪 Family</mfp-button>
                 </NuxtLink>
