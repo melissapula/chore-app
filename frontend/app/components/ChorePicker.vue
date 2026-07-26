@@ -1,8 +1,9 @@
 <script setup lang="ts">
 // Searchable chore picker. Common chores come pre-gamified (a quest-flavored
 // name kids see) with the plain name kept for search + a subtitle hint. Typing
-// filters on both; when nothing matches, offers "Create custom chore" using
-// whatever was typed. Emits `select`; the parent form fills from it.
+// filters on both AND always offers "Create <what you typed>" as a custom chore
+// — even when the text partially matches a preset. Emits `select`; the parent
+// form fills from it (custom emits xp 0 / no emoji, for the parent to edit).
 export interface ChorePreset {
     title: string; // gamified, quest-flavored name (what kids see)
     plain: string; // plain name — for search + a subtitle hint
@@ -221,12 +222,29 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onDocPointer));
                     </button>
                 </li>
             </ul>
-            <div v-else class="empty">
-                <p class="no">No matches for "{{ query }}".</p>
-                <mfp-button variant="primary" @click="createCustom">
-                    Create custom chore
-                </mfp-button>
-            </div>
+            <p v-else-if="query.trim()" class="hint">
+                No matches — make up your own:
+            </p>
+            <p v-else class="hint">
+                Pick one above, or type your own chore name.
+            </p>
+
+            <!-- Always let the parent create a custom chore from what they typed,
+                 even when the text partially matches a preset. -->
+            <button
+                v-if="query.trim()"
+                type="button"
+                class="opt custom"
+                @click="createCustom"
+            >
+                <span class="e">➕</span>
+                <span class="t">
+                    <span class="quest">Create “{{ query.trim() }}”</span>
+                    <span class="plain"
+                        >Custom chore — set your own XP next</span
+                    >
+                </span>
+            </button>
         </div>
     </div>
 </template>
@@ -311,12 +329,23 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onDocPointer));
     color: var(--color-brand-primary, #6c4ce0);
     white-space: nowrap;
 }
-.empty {
-    padding: 1rem;
-    text-align: center;
-}
-.no {
-    margin: 0 0 0.75rem;
+.hint {
+    margin: 0;
+    padding: 0.6rem 0.75rem 0.3rem;
+    font-size: 0.82rem;
     color: var(--color-text-muted, #6b6672);
+}
+.opt.custom {
+    margin: 0.15rem 0.25rem 0.25rem;
+    width: calc(100% - 0.5rem);
+    border-top: 1px solid var(--color-surface-muted, #e6e2ef);
+    border-radius: 0 0 var(--radius-sm, 0.5rem) var(--radius-sm, 0.5rem);
+    color: var(--color-brand-primary, #6c4ce0);
+}
+.opt.custom .quest {
+    color: var(--color-brand-primary, #6c4ce0);
+}
+.opt.custom .e {
+    color: var(--color-brand-primary, #6c4ce0);
 }
 </style>
