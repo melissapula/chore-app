@@ -66,24 +66,3 @@ export interface InstanceListRow extends ChoreInstanceRow {
         category: string | null;
     } | null;
 }
-
-/** The join shape read when claiming (timer defaults + eligibility). */
-export interface ClaimSelect {
-    id: string;
-    state: string;
-    chores: {
-        chore_type: string;
-        start_timer_mins: number | null;
-        eligible_kid_ids: string[] | null;
-    };
-    households: { default_start_timer_mins: number };
-}
-
-/** The join shape read when starting (finish-timer defaults). */
-export interface StartSelect {
-    id: string;
-    state: string;
-    claimed_by: string | null;
-    chores: { finish_timer_mins: number | null };
-    households: { default_finish_timer_mins: number };
-}

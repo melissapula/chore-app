@@ -241,7 +241,14 @@ The gate is computed **live** (no end-of-week cron yet): per kid, count their
 - **Money lives in the ledger.** To change a balance, append a `ledger_entries`
   row. The weekly gate governs _payout release_, not whether money was earned.
 - **State transitions are server-side and validated.** A transition checks the
-  current state before writing the next one (no illegal jumps).
+  current state before writing the next one (no illegal jumps). Because the
+  frontend can hit PostgREST directly, this is enforced in the DB, not just the
+  API: RLS lets only **parents** `UPDATE chore_instances` (approve/confirm/
+  release), and every **kid** transition (claim/start/submit/mark-done) runs
+  through a `SECURITY DEFINER` RPC (`claim_instance` etc., migration 0011) that
+  locks the row, re-authorizes the caller, and validates state. Never add a kid
+  write path that bypasses those RPCs. Self-edits to `users` can't change
+  `role`/`household_id` (pinned in `users_update_self`).
 - **Update `SPEC.md` in the same commit when you change behavior.** The spec leads.
 - **Phone-first — keep it mobile-friendly.** The app is used mostly on phones (an
   installable PWA). Pages use `.wrap { max-width: ~32rem; padding: 0 1rem }` so they
