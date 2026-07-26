@@ -46,6 +46,7 @@ const kids = ref<Kid[]>([]);
 const loading = ref(true);
 const error = ref<string | null>(null);
 const busyId = ref<string | null>(null);
+const openNotes = ref<string | null>(null); // instance id whose note thread is open
 
 // new-chore form
 const choreType = ref<'paid' | 'required'>('paid');
@@ -393,63 +394,83 @@ onUnmounted(() => {
                 required one.
             </p>
             <ul v-else class="list">
-                <li v-for="i in pool" :key="i.id" class="item">
-                    <span class="icon">{{ i.chores?.icon_emoji || '📋' }}</span>
-                    <span class="grow">
-                        <strong>{{ i.chores?.title || 'Chore' }}</strong>
-                        <span
-                            v-if="i.chores?.chore_type === 'required'"
-                            class="req-sub"
-                        >
-                            for {{ kidName(i.assigned_to) }}
+                <li v-for="i in pool" :key="i.id" class="live-item">
+                    <div class="item">
+                        <span class="icon">{{
+                            i.chores?.icon_emoji || '📋'
+                        }}</span>
+                        <span class="grow">
+                            <strong>{{ i.chores?.title || 'Chore' }}</strong>
+                            <span
+                                v-if="i.chores?.chore_type === 'required'"
+                                class="req-sub"
+                            >
+                                for {{ kidName(i.assigned_to) }}
+                            </span>
+                            <span v-else class="xp"
+                                >{{ i.value_cents_snapshot }} XP</span
+                            >
                         </span>
-                        <span v-else class="xp"
-                            >{{ i.value_cents_snapshot }} XP</span
-                        >
-                    </span>
-                    <span class="badge" :class="`s-${i.state}`">
-                        {{ STATE_LABEL[i.state] || i.state }}
-                    </span>
+                        <span class="badge" :class="`s-${i.state}`">
+                            {{ STATE_LABEL[i.state] || i.state }}
+                        </span>
 
-                    <!-- Paid: approve / release -->
-                    <template v-if="i.chores?.chore_type !== 'required'">
+                        <!-- Paid: approve / release -->
+                        <template v-if="i.chores?.chore_type !== 'required'">
+                            <mfp-button
+                                v-if="i.state === 'SUBMITTED'"
+                                variant="primary"
+                                :disabled="busyId === i.id"
+                                @click="act(i.id, 'approve')"
+                            >
+                                Approve
+                            </mfp-button>
+                            <mfp-button
+                                v-if="
+                                    [
+                                        'CLAIMED',
+                                        'IN_PROGRESS',
+                                        'SUBMITTED',
+                                    ].includes(i.state)
+                                "
+                                variant="ghost"
+                                :disabled="busyId === i.id"
+                                @click="act(i.id, 'release')"
+                            >
+                                {{
+                                    i.state === 'SUBMITTED'
+                                        ? 'Send back'
+                                        : 'Release'
+                                }}
+                            </mfp-button>
+                        </template>
+
+                        <!-- Required: confirm -->
                         <mfp-button
-                            v-if="i.state === 'SUBMITTED'"
+                            v-else-if="i.state === 'SUBMITTED'"
                             variant="primary"
                             :disabled="busyId === i.id"
-                            @click="act(i.id, 'approve')"
+                            @click="act(i.id, 'confirm')"
                         >
-                            Approve
+                            Confirm
                         </mfp-button>
-                        <mfp-button
-                            v-if="
-                                [
-                                    'CLAIMED',
-                                    'IN_PROGRESS',
-                                    'SUBMITTED',
-                                ].includes(i.state)
-                            "
-                            variant="ghost"
-                            :disabled="busyId === i.id"
-                            @click="act(i.id, 'release')"
-                        >
-                            {{
-                                i.state === 'SUBMITTED'
-                                    ? 'Send back'
-                                    : 'Release'
-                            }}
-                        </mfp-button>
-                    </template>
 
-                    <!-- Required: confirm -->
-                    <mfp-button
-                        v-else-if="i.state === 'SUBMITTED'"
-                        variant="primary"
-                        :disabled="busyId === i.id"
-                        @click="act(i.id, 'confirm')"
-                    >
-                        Confirm
-                    </mfp-button>
+                        <button
+                            class="notes-toggle"
+                            :aria-label="'Notes'"
+                            @click="
+                                openNotes = openNotes === i.id ? null : i.id
+                            "
+                        >
+                            💬
+                        </button>
+                    </div>
+
+                    <NoteThread
+                        v-if="openNotes === i.id"
+                        :instance-id="i.id"
+                        :subject-kid-id="i.claimed_by ?? i.assigned_to"
+                    />
                 </li>
             </ul>
         </section>
@@ -576,6 +597,10 @@ form {
     flex-direction: column;
     gap: 0.5rem;
 }
+.live-item {
+    display: flex;
+    flex-direction: column;
+}
 .item {
     display: flex;
     align-items: center;
@@ -583,6 +608,14 @@ form {
     padding: 0.5rem;
     border-radius: var(--radius-md, 0.75rem);
     background: var(--color-surface-muted, #f5f3f7);
+}
+.notes-toggle {
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-size: 1.1rem;
+    padding: 0.2rem;
+    line-height: 1;
 }
 .icon {
     font-size: 1.5rem;

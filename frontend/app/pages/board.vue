@@ -53,6 +53,7 @@ const history = ref<LedgerRow[]>([]);
 const loading = ref(true);
 const error = ref<string | null>(null);
 const busyId = ref<string | null>(null);
+const openNotes = ref<string | null>(null); // instance id whose note thread is open
 // Local clock for countdowns; updated every second.
 const now = ref<number>(0);
 
@@ -305,42 +306,55 @@ onUnmounted(() => {
         <section v-if="!loading && myRequired.length" class="card">
             <h2>📋 My chores</h2>
             <ul class="list">
-                <li
-                    v-for="i in myRequired"
-                    :key="i.id"
-                    class="item"
-                    :class="{ done: i.state === 'MISSED' }"
-                >
-                    <span class="icon">{{ i.chores?.icon_emoji || '📋' }}</span>
-                    <span class="grow">
-                        <strong>{{ i.chores?.title || 'Chore' }}</strong>
-                        <span
+                <li v-for="i in myRequired" :key="i.id" class="live-item">
+                    <div class="item" :class="{ done: i.state === 'MISSED' }">
+                        <span class="icon">{{
+                            i.chores?.icon_emoji || '📋'
+                        }}</span>
+                        <span class="grow">
+                            <strong>{{ i.chores?.title || 'Chore' }}</strong>
+                            <span
+                                v-if="i.state === 'ASSIGNED'"
+                                class="timer"
+                                :class="{
+                                    over:
+                                        !!i.due_date &&
+                                        new Date(i.due_date).getTime() < now,
+                                }"
+                            >
+                                ⏰ {{ dueLabel(i.due_date) }}
+                            </span>
+                            <span
+                                v-else-if="i.state === 'SUBMITTED'"
+                                class="pending"
+                            >
+                                ✅ Done — waiting for a grown-up
+                            </span>
+                            <span v-else class="missed-tag">😬 Missed</span>
+                        </span>
+                        <mfp-button
                             v-if="i.state === 'ASSIGNED'"
-                            class="timer"
-                            :class="{
-                                over:
-                                    !!i.due_date &&
-                                    new Date(i.due_date).getTime() < now,
-                            }"
+                            variant="primary"
+                            :disabled="busyId === i.id"
+                            @click="act(i.id, 'mark-done')"
                         >
-                            ⏰ {{ dueLabel(i.due_date) }}
-                        </span>
-                        <span
-                            v-else-if="i.state === 'SUBMITTED'"
-                            class="pending"
+                            Mark done
+                        </mfp-button>
+                        <button
+                            class="notes-toggle"
+                            aria-label="Notes"
+                            @click="
+                                openNotes = openNotes === i.id ? null : i.id
+                            "
                         >
-                            ✅ Done — waiting for a grown-up
-                        </span>
-                        <span v-else class="missed-tag">😬 Missed</span>
-                    </span>
-                    <mfp-button
-                        v-if="i.state === 'ASSIGNED'"
-                        variant="primary"
-                        :disabled="busyId === i.id"
-                        @click="act(i.id, 'mark-done')"
-                    >
-                        Mark done
-                    </mfp-button>
+                            💬
+                        </button>
+                    </div>
+                    <NoteThread
+                        v-if="openNotes === i.id"
+                        :instance-id="i.id"
+                        :subject-kid-id="uid"
+                    />
                 </li>
             </ul>
         </section>
@@ -349,51 +363,77 @@ onUnmounted(() => {
         <section v-if="!loading && myQuests.length" class="card">
             <h2>⚡ My quests</h2>
             <ul class="list">
-                <li v-for="i in myQuests" :key="i.id" class="item">
-                    <span class="icon">{{ i.chores?.icon_emoji || '📋' }}</span>
-                    <span class="grow">
-                        <strong>{{ i.chores?.title || 'Chore' }}</strong>
-                        <span class="xp">{{ i.value_cents_snapshot }} XP</span>
-                        <span
-                            v-if="i.state === 'CLAIMED' && i.start_deadline"
-                            class="timer"
-                            :class="{ over: remaining(i.start_deadline).over }"
-                        >
-                            ⏳ Start it: {{ remaining(i.start_deadline).text }}
+                <li v-for="i in myQuests" :key="i.id" class="live-item">
+                    <div class="item">
+                        <span class="icon">{{
+                            i.chores?.icon_emoji || '📋'
+                        }}</span>
+                        <span class="grow">
+                            <strong>{{ i.chores?.title || 'Chore' }}</strong>
+                            <span class="xp"
+                                >{{ i.value_cents_snapshot }} XP</span
+                            >
+                            <span
+                                v-if="i.state === 'CLAIMED' && i.start_deadline"
+                                class="timer"
+                                :class="{
+                                    over: remaining(i.start_deadline).over,
+                                }"
+                            >
+                                ⏳ Start it:
+                                {{ remaining(i.start_deadline).text }}
+                            </span>
+                            <span
+                                v-else-if="
+                                    i.state === 'IN_PROGRESS' &&
+                                    i.finish_deadline
+                                "
+                                class="timer"
+                                :class="{
+                                    over: remaining(i.finish_deadline).over,
+                                }"
+                            >
+                                ⏱️ Finish it:
+                                {{ remaining(i.finish_deadline).text }}
+                            </span>
+                            <span
+                                v-else-if="i.state === 'SUBMITTED'"
+                                class="pending"
+                            >
+                                ✅ Turned in — waiting for a grown-up
+                            </span>
                         </span>
-                        <span
-                            v-else-if="
-                                i.state === 'IN_PROGRESS' && i.finish_deadline
+                        <mfp-button
+                            v-if="i.state === 'CLAIMED'"
+                            variant="primary"
+                            :disabled="busyId === i.id"
+                            @click="act(i.id, 'start')"
+                        >
+                            Start
+                        </mfp-button>
+                        <mfp-button
+                            v-else-if="i.state === 'IN_PROGRESS'"
+                            variant="primary"
+                            :disabled="busyId === i.id"
+                            @click="act(i.id, 'submit')"
+                        >
+                            Turn in
+                        </mfp-button>
+                        <button
+                            class="notes-toggle"
+                            aria-label="Notes"
+                            @click="
+                                openNotes = openNotes === i.id ? null : i.id
                             "
-                            class="timer"
-                            :class="{ over: remaining(i.finish_deadline).over }"
                         >
-                            ⏱️ Finish it:
-                            {{ remaining(i.finish_deadline).text }}
-                        </span>
-                        <span
-                            v-else-if="i.state === 'SUBMITTED'"
-                            class="pending"
-                        >
-                            ✅ Turned in — waiting for a grown-up
-                        </span>
-                    </span>
-                    <mfp-button
-                        v-if="i.state === 'CLAIMED'"
-                        variant="primary"
-                        :disabled="busyId === i.id"
-                        @click="act(i.id, 'start')"
-                    >
-                        Start
-                    </mfp-button>
-                    <mfp-button
-                        v-else-if="i.state === 'IN_PROGRESS'"
-                        variant="primary"
-                        :disabled="busyId === i.id"
-                        @click="act(i.id, 'submit')"
-                    >
-                        Turn in
-                    </mfp-button>
+                            💬
+                        </button>
+                    </div>
+                    <NoteThread
+                        v-if="openNotes === i.id"
+                        :instance-id="i.id"
+                        :subject-kid-id="uid"
+                    />
                 </li>
             </ul>
         </section>
@@ -653,6 +693,10 @@ h2 {
     flex-direction: column;
     gap: 0.5rem;
 }
+.live-item {
+    display: flex;
+    flex-direction: column;
+}
 .item {
     display: flex;
     align-items: center;
@@ -660,6 +704,14 @@ h2 {
     padding: 0.6rem;
     border-radius: var(--radius-md, 0.75rem);
     background: var(--color-surface-muted, #f5f3f7);
+}
+.notes-toggle {
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-size: 1.1rem;
+    padding: 0.2rem;
+    line-height: 1;
 }
 .item.done {
     opacity: 0.75;

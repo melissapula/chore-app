@@ -126,7 +126,11 @@ chore-app/
       on `/board`. Gate is computed live; only the release/hold decision persists.
       Follow-up (optional): an end-of-week cron to snapshot/finalize `weekly_gates`
       and reflect "held" weeks in the spendable balance.
-- [ ] **6. Notes + emojis.**
+- [x] **6. Notes + emojis.** `components/NoteThread.vue` — a parent↔kid note
+      thread on a chore instance (quick-emoji reactions + text), RLS-scoped
+      (recipient_id = the chore's kid so siblings don't see it). Expandable via a
+      💬 toggle on `/chores` (parent live list) and `/board` (kid's active chores).
+      Uses the `notes` table (migration 0001) — no new migration.
 - [x] **7. Realtime sync + web push.** Realtime: `/board` (kid) and `/chores`
       (parent) subscribe to `chore.chore_instances` (+ `ledger_entries` on the
       board) via Supabase Realtime — instant updates, RLS-scoped; 30s poll is a
