@@ -74,12 +74,13 @@ The **same env vars** apply to either backend host below:
 | `VAPID_PUBLIC_KEY`          | your VAPID public key (optional)                              |
 | `VAPID_PRIVATE_KEY`         | your VAPID private key (optional, secret)                    |
 | `VAPID_SUBJECT`             | `mailto:you@example.com` (optional)                          |
-| `FRONTEND_ORIGIN`           | **leave blank for now** — you'll set it in Part C            |
+| `FRONTEND_ORIGIN`           | a **placeholder** for now, e.g. `https://placeholder.vercel.app` — you'll swap in the real Vercel URL in Part C |
 
 > Don't set `PORT` — both hosts inject it automatically and the app reads it.
-> `NODE_ENV=production` **and** `FRONTEND_ORIGIN` are both required; the app
-> refuses to boot in production without a `FRONTEND_ORIGIN`, so it will only start
-> cleanly after Part C. That's expected.
+> `NODE_ENV=production` **and** `FRONTEND_ORIGIN` are both required, and the app
+> **refuses to boot** in production if `FRONTEND_ORIGIN` is empty. You don't have
+> the Vercel URL yet, so set a throwaway placeholder now (CORS being wrong is
+> harmless until the frontend exists) and replace it in Part C.
 
 ---
 
@@ -96,7 +97,9 @@ becomes your `API_BASE` in Part B.
 3. Settings:
    - **Root Directory:** `backend` ← important (this is a monorepo).
    - **Branch:** the branch you chose above.
-   - **Build Command:** `npm install && npm run build`
+   - **Build Command:** `npm install --include=dev && npm run build`
+     (the `--include=dev` is required — `nest build` lives in devDependencies, and
+     `NODE_ENV=production` would otherwise make npm skip it and the build fails).
    - **Start Command:** `npm run start:prod`
    - **Instance Type:** **Free**.
 4. Add the env vars from the table above (**Environment** section).
