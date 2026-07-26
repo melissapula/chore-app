@@ -59,7 +59,6 @@ interface GuildView {
 const REASON_LABEL: Record<string, string> = {
     chore_approved: 'Chore approved',
     parent_adjustment: 'From a grown-up',
-    goal_allocation: 'Toward a quest',
     quest_redeemed: 'Quest redeemed',
     payout: 'Cashed out',
 };
