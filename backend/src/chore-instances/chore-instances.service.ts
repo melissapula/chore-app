@@ -374,4 +374,22 @@ export class ChoreInstancesService {
         }
         return updated;
     }
+
+    /**
+     * Remove an instance from the pool (parent). Any earned ledger entry is kept
+     * — its chore_instance_id FK is `on delete set null`, so the kid's XP stands.
+     * RLS (`instances_delete_parent`) enforces household + parent.
+     */
+    async remove(user: AuthUser, id: string) {
+        if (user.role !== 'parent') {
+            throw new ForbiddenException('Only a parent can remove a chore');
+        }
+        const db = this.supabase.userClient(user.accessToken);
+        const { error } = await db
+            .from('chore_instances')
+            .delete()
+            .eq('id', id);
+        if (error) throw new BadRequestException(error.message);
+        return { ok: true };
+    }
 }

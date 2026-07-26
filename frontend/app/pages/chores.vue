@@ -47,6 +47,7 @@ const loading = ref(true);
 const error = ref<string | null>(null);
 const busyId = ref<string | null>(null);
 const openNotes = ref<string | null>(null); // instance id whose note thread is open
+const removingId = ref<string | null>(null); // instance id awaiting remove confirm
 
 // new-chore form
 const choreType = ref<'paid' | 'required'>('paid');
@@ -194,6 +195,20 @@ async function act(id: string, action: 'approve' | 'confirm' | 'release') {
     busyId.value = id;
     try {
         await authFetch(`/chore-instances/${id}/${action}`, { method: 'POST' });
+        await loadAll();
+    } catch (e) {
+        error.value = apiMessage(e);
+    }
+    busyId.value = null;
+}
+
+// Remove an instance from the pool entirely (parent). Two-step confirm.
+async function removeInstance(id: string) {
+    error.value = null;
+    busyId.value = id;
+    try {
+        await authFetch(`/chore-instances/${id}`, { method: 'DELETE' });
+        removingId.value = null;
         await loadAll();
     } catch (e) {
         error.value = apiMessage(e);
@@ -473,6 +488,31 @@ onUnmounted(() => {
                         >
                             💬
                         </button>
+                        <button
+                            class="notes-toggle"
+                            aria-label="Remove from pool"
+                            title="Remove from pool"
+                            @click="
+                                removingId = removingId === i.id ? null : i.id
+                            "
+                        >
+                            🗑️
+                        </button>
+                    </div>
+
+                    <!-- Confirm removing this instance from the pool -->
+                    <div v-if="removingId === i.id" class="remove-bar">
+                        <span class="remove-q">Remove this from the pool?</span>
+                        <mfp-button
+                            variant="danger"
+                            :disabled="busyId === i.id"
+                            @click="removeInstance(i.id)"
+                        >
+                            {{ busyId === i.id ? 'Removing…' : 'Remove' }}
+                        </mfp-button>
+                        <mfp-button variant="ghost" @click="removingId = null">
+                            Cancel
+                        </mfp-button>
                     </div>
 
                     <NoteThread
@@ -631,6 +671,22 @@ form {
     font-size: 1.1rem;
     padding: 0.2rem;
     line-height: 1;
+}
+.remove-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-top: 0.4rem;
+    padding: 0.5rem 0.6rem;
+    border-radius: var(--radius-md, 0.75rem);
+    background: #ffe9e9;
+}
+.remove-q {
+    flex: 1;
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #b3261e;
 }
 .icon {
     font-size: 1.5rem;

@@ -1,5 +1,6 @@
 import {
     Controller,
+    Delete,
     Get,
     Param,
     ParseUUIDPipe,
@@ -79,5 +80,14 @@ export class ChoreInstancesController {
         @Param('id', ParseUUIDPipe) id: string,
     ) {
         return this.instances.confirm(user, id);
+    }
+
+    /** parent → remove an instance from the pool entirely. */
+    @Delete(':id')
+    remove(
+        @CurrentUser() user: AuthUser,
+        @Param('id', ParseUUIDPipe) id: string,
+    ) {
+        return this.instances.remove(user, id);
     }
 }
