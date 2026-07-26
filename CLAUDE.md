@@ -161,7 +161,7 @@ chore-app/
       (quests with a deadline show XP/week + green/yellow/red). Chore requests
       (migration 0010, `chore_requests`): `/requests` — kid pitches a chore, parent
       approves (→ creates a paid chore, stamps `chore_id`) / declines. Guild reuses
-      `quests` (`scope='guild'`). Lifetime level curve: L1→L2 = 100 XP, +10%
+      `quests` (`scope='guild'`). Lifetime level curve: L1→L2 = 1000 XP, +10%
       compounding per level (`~/utils/level.ts`).
 - [x] **9b. Family-management + dashboard UX** (layered on top of 1–9).
       → **Kid tabbed dashboard** (`components/KidDashboard.vue`, rendered on
