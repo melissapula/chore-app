@@ -192,55 +192,32 @@ onMounted(async () => {
                 Household: <strong>{{ householdName }}</strong> · Role:
                 <strong class="role">{{ profile.role }}</strong>
             </p>
-            <div class="cta">
-                <template v-if="profile.role === 'parent'">
-                    <NuxtLink to="/chores">
-                        <mfp-button variant="primary"
-                            >⚔️ Manage chores</mfp-button
-                        >
-                    </NuxtLink>
-                    <NuxtLink to="/family">
-                        <mfp-button variant="secondary">👪 Family</mfp-button>
-                    </NuxtLink>
-                    <NuxtLink to="/pay">
-                        <mfp-button variant="secondary"
-                            >💵 Weekly pay</mfp-button
-                        >
-                    </NuxtLink>
-                    <NuxtLink to="/guild">
-                        <mfp-button variant="secondary"
-                            >🛡️ Guild quest</mfp-button
-                        >
-                    </NuxtLink>
-                    <NuxtLink to="/requests">
-                        <mfp-button variant="secondary"
-                            >💬 Chore ideas</mfp-button
-                        >
-                    </NuxtLink>
-                </template>
-                <template v-else>
-                    <NuxtLink to="/board">
-                        <mfp-button variant="primary"
-                            >🗺️ Quest Board</mfp-button
-                        >
-                    </NuxtLink>
-                    <NuxtLink to="/quests">
-                        <mfp-button variant="secondary"
-                            >🎁 My quests</mfp-button
-                        >
-                    </NuxtLink>
-                    <NuxtLink to="/guild">
-                        <mfp-button variant="secondary"
-                            >🛡️ Guild quest</mfp-button
-                        >
-                    </NuxtLink>
-                    <NuxtLink to="/requests">
-                        <mfp-button variant="secondary"
-                            >💬 Request a chore</mfp-button
-                        >
-                    </NuxtLink>
-                </template>
+            <!-- Parent: nav buttons. Kid: the tabbed quest dashboard. -->
+            <div v-if="profile.role === 'parent'" class="cta">
+                <NuxtLink to="/chores">
+                    <mfp-button variant="primary">⚔️ Manage chores</mfp-button>
+                </NuxtLink>
+                <NuxtLink to="/family">
+                    <mfp-button variant="secondary">👪 Family</mfp-button>
+                </NuxtLink>
+                <NuxtLink to="/pay">
+                    <mfp-button variant="secondary">💵 Weekly pay</mfp-button>
+                </NuxtLink>
+                <NuxtLink to="/guild">
+                    <mfp-button variant="secondary">🛡️ Guild quest</mfp-button>
+                </NuxtLink>
+                <NuxtLink to="/requests">
+                    <mfp-button variant="secondary">💬 Chore ideas</mfp-button>
+                </NuxtLink>
             </div>
+            <template v-else>
+                <KidDashboard :uid="profile.id" />
+                <p class="kid-links">
+                    <NuxtLink to="/requests" class="kid-link"
+                        >💬 Request a chore</NuxtLink
+                    >
+                </p>
+            </template>
             <p v-if="pushOk" class="pushrow">
                 <mfp-button
                     variant="ghost"
@@ -419,11 +396,21 @@ onMounted(async () => {
 
 <style scoped>
 .wrap {
-    max-width: 26rem;
-    margin: 4rem auto;
+    max-width: 32rem;
+    margin: 2.5rem auto;
     padding: 0 1rem;
     font-family: var(--font-family-sans);
     color: var(--color-text-default);
+}
+.kid-links {
+    margin: 1rem 0 0;
+    text-align: center;
+}
+.kid-link {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--color-brand-primary, #6c4ce0);
+    text-decoration: none;
 }
 h1 {
     font-family: 'Baloo 2', var(--font-family-sans);
