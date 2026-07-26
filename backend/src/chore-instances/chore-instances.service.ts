@@ -145,12 +145,28 @@ export class ChoreInstancesService {
         return data;
     }
 
-    /** Parent releases a held chore back to OPEN (SPEC §2), clearing progress. */
+    /** Parent releases a held PAID chore back to OPEN (SPEC §2), clearing progress. */
     async release(user: AuthUser, id: string) {
         if (user.role !== 'parent') {
             throw new ForbiddenException('Only a parent can release a chore');
         }
         const db = this.supabase.userClient(user.accessToken);
+
+        // Release is paid-only — a required chore has no OPEN pool to return to
+        // (releasing one would strand it OPEN-but-unclaimable and hold the gate).
+        const { data: inst, error: readErr } = (await db
+            .from('chore_instances')
+            .select('id, chores(chore_type)')
+            .eq('id', id)
+            .maybeSingle()) as DbResult<{
+            id: string;
+            chores: { chore_type: string } | null;
+        }>;
+        if (readErr) throw new BadRequestException(readErr.message);
+        if (!inst) throw new NotFoundException('Instance not found');
+        if (inst.chores?.chore_type !== 'paid') {
+            throw new BadRequestException('Only paid chores can be released');
+        }
 
         const { data: updated, error } = (await db
             .from('chore_instances')
