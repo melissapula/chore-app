@@ -13,6 +13,8 @@ export interface LevelInfo {
     span: number;
     /** XP still needed to reach the next level. */
     toNext: number;
+    /** Cumulative lifetime XP at which the next level is reached. */
+    nextAt: number;
     /** 0–100 progress through the current level. */
     pct: number;
 }
@@ -57,6 +59,7 @@ export function levelInfo(lifetimeXp: number): LevelInfo {
         into,
         span,
         toNext: hi - xp,
+        nextAt: hi,
         pct: Math.round((into / span) * 100),
     };
 }

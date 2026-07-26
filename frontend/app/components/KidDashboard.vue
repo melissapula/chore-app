@@ -458,6 +458,11 @@ onUnmounted(() => {
                 </div>
                 <span class="lvl-next">{{ lvl.toNext }} to next</span>
             </div>
+            <div class="lvl-total">
+                ⭐ {{ lifetime.toLocaleString() }} /
+                {{ lvl.nextAt.toLocaleString() }} XP earned toward Lv
+                {{ lvl.level + 1 }}
+            </div>
             <div v-if="streak.count" class="streak">
                 🔥 {{ streak.count }}-day streak<template v-if="!streak.active"
                     ><span class="streak-nudge">
@@ -1083,6 +1088,11 @@ onUnmounted(() => {
     font-size: 0.72rem;
     color: var(--color-text-muted);
     white-space: nowrap;
+}
+.lvl-total {
+    margin-top: 0.3rem;
+    font-size: 0.72rem;
+    color: var(--color-text-muted);
 }
 .streak {
     margin-top: 0.6rem;
