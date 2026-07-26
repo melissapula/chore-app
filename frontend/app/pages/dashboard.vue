@@ -434,6 +434,28 @@ h1 {
     object-fit: cover;
     box-shadow: inset 0 0 0 2px var(--color-brand-primary);
 }
+/* Parent nav: a full-width primary action + a 2-up grid of the rest. */
+.cta {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.6rem;
+    margin-top: 1.75rem;
+}
+.cta a {
+    display: block;
+    text-decoration: none;
+}
+.cta a:first-child {
+    grid-column: 1 / -1;
+}
+.cta mfp-button {
+    display: block;
+    width: 100%;
+}
+/* Stretch the button's inner control to fill the tile (exposed CSS part). */
+.cta mfp-button::part(button) {
+    width: 100%;
+}
 .tabs {
     display: flex;
     gap: 0.5rem;
