@@ -116,6 +116,9 @@ function switchMode(m: 'parent' | 'kid') {
     error.value = null;
     notice.value = null;
 }
+const onTabKeys = useTabKeys(['parent', 'kid'] as const, mode, (m) =>
+    switchMode(m),
+);
 
 function switchAuth(m: 'login' | 'signup') {
     authMode.value = m;
@@ -130,14 +133,16 @@ function switchAuth(m: 'login' | 'signup') {
     <main class="wrap">
         <h1>Log in</h1>
 
-        <div class="tabs" role="tablist">
+        <div class="tabs" role="tablist" aria-label="Who's signing in">
             <button
                 type="button"
                 class="tab"
                 :class="{ active: mode === 'parent' }"
                 role="tab"
                 :aria-selected="mode === 'parent'"
+                :tabindex="mode === 'parent' ? 0 : -1"
                 @click="switchMode('parent')"
+                @keydown="onTabKeys"
             >
                 🧑‍🍼 Parent
             </button>
@@ -147,7 +152,9 @@ function switchAuth(m: 'login' | 'signup') {
                 :class="{ active: mode === 'kid' }"
                 role="tab"
                 :aria-selected="mode === 'kid'"
+                :tabindex="mode === 'kid' ? 0 : -1"
                 @click="switchMode('kid')"
+                @keydown="onTabKeys"
             >
                 🦸 Kid
             </button>

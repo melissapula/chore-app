@@ -152,6 +152,10 @@ function onPreset(p: {
     isCustom.value = !!p.custom;
 }
 
+const onTabKeys = useTabKeys(['paid', 'required'] as const, choreType, (t) =>
+    switchType(t),
+);
+
 function switchType(t: 'paid' | 'required') {
     choreType.value = t;
     // Reset shared fields so a paid preset doesn't bleed into a required chore.
@@ -443,14 +447,16 @@ onUnmounted(() => {
         <section class="card">
             <h2>New chore</h2>
 
-            <div class="tabs" role="tablist">
+            <div class="tabs" role="tablist" aria-label="Chore type">
                 <button
                     type="button"
                     class="tab"
                     :class="{ active: choreType === 'paid' }"
                     role="tab"
                     :aria-selected="choreType === 'paid'"
+                    :tabindex="choreType === 'paid' ? 0 : -1"
                     @click="switchType('paid')"
+                    @keydown="onTabKeys"
                 >
                     💰 Paid
                 </button>
@@ -460,7 +466,9 @@ onUnmounted(() => {
                     :class="{ active: choreType === 'required' }"
                     role="tab"
                     :aria-selected="choreType === 'required'"
+                    :tabindex="choreType === 'required' ? 0 : -1"
                     @click="switchType('required')"
+                    @keydown="onTabKeys"
                 >
                     📌 Required
                 </button>

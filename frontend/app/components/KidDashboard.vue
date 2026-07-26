@@ -64,6 +64,11 @@ const REASON_LABEL: Record<string, string> = {
 };
 
 const tab = ref<'main' | 'side' | 'guild'>('main');
+const onTabKeys = useTabKeys(
+    ['main', 'side', 'guild'] as const,
+    tab,
+    (t) => (tab.value = t),
+);
 const pool = ref<Instance[]>([]);
 const myXp = ref(0);
 const history = ref<LedgerRow[]>([]);
@@ -317,13 +322,15 @@ onUnmounted(() => {
         </div>
 
         <!-- Tabs -->
-        <div class="tabs" role="tablist">
+        <div class="tabs" role="tablist" aria-label="Quest sections">
             <button
                 class="tab"
                 :class="{ active: tab === 'main' }"
                 role="tab"
                 :aria-selected="tab === 'main'"
+                :tabindex="tab === 'main' ? 0 : -1"
                 @click="tab = 'main'"
+                @keydown="onTabKeys"
             >
                 ⚔️ Main Quest
             </button>
@@ -332,7 +339,9 @@ onUnmounted(() => {
                 :class="{ active: tab === 'side' }"
                 role="tab"
                 :aria-selected="tab === 'side'"
+                :tabindex="tab === 'side' ? 0 : -1"
                 @click="tab = 'side'"
+                @keydown="onTabKeys"
             >
                 🗺️ Side Quest
             </button>
@@ -341,7 +350,9 @@ onUnmounted(() => {
                 :class="{ active: tab === 'guild' }"
                 role="tab"
                 :aria-selected="tab === 'guild'"
+                :tabindex="tab === 'guild' ? 0 : -1"
                 @click="tab = 'guild'"
+                @keydown="onTabKeys"
             >
                 🛡️ Guild
             </button>
@@ -665,7 +676,13 @@ onUnmounted(() => {
                     >
                     <span class="pct">{{ guildPct }}%</span>
                 </p>
-                <div class="bar">
+                <div
+                    class="bar"
+                    role="img"
+                    :aria-label="`Guild progress ${guildPct}% — ${guild.contributions
+                        .map((c) => `${c.display_name} ${c.xp} XP`)
+                        .join(', ')}`"
+                >
                     <div
                         v-for="(c, i) in guild.contributions"
                         v-show="c.xp > 0"
