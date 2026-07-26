@@ -15,6 +15,7 @@ interface Member {
     username: string | null;
     avatar_emoji: string | null;
     avatar_url: string | null;
+    birthdate: string | null;
 }
 
 const uid = ref<string | null>(null);
@@ -131,6 +132,7 @@ const displayName = ref('');
 const username = ref('');
 const usernameEdited = ref(false);
 const pin = ref('');
+const birthdate = ref(''); // optional; powers the §3b risky-chore age warning
 const avatar = ref<AvatarValue | null>(null);
 const avatarPickerOpen = ref(false);
 const creating = ref(false);
@@ -146,6 +148,7 @@ const editKidId = ref<string | null>(null);
 const editName = ref('');
 const editUsername = ref('');
 const editPin = ref('');
+const editBirthdate = ref('');
 const editAvatar = ref<AvatarValue | null>(null);
 const editAvatarOpen = ref(false);
 const savingKid = ref(false);
@@ -155,6 +158,7 @@ function startEditKid(m: Member) {
     editName.value = m.display_name;
     editUsername.value = m.username ?? '';
     editPin.value = '';
+    editBirthdate.value = m.birthdate ?? '';
     editAvatar.value = m.avatar_url
         ? { kind: 'image', dataUrl: m.avatar_url }
         : m.avatar_emoji
@@ -189,6 +193,7 @@ async function saveKid() {
         username: uname,
     };
     if (editPin.value.trim()) body.pin = editPin.value.trim();
+    body.birthdate = editBirthdate.value || null; // null clears it
     if (editAvatar.value?.kind === 'emoji') {
         body.avatar_emoji = editAvatar.value.emoji;
         body.avatar_url = null;
@@ -336,7 +341,9 @@ async function loadMembers() {
     error.value = null;
     const { data, error: err } = await supabase
         .from('users')
-        .select('id, display_name, role, username, avatar_emoji, avatar_url')
+        .select(
+            'id, display_name, role, username, avatar_emoji, avatar_url, birthdate',
+        )
         .order('created_at', { ascending: true });
     if (err) {
         error.value = err.message;
@@ -373,6 +380,7 @@ async function addKid() {
                 display_name: name,
                 username: uname,
                 pin: p,
+                birthdate: birthdate.value || undefined,
                 avatar_emoji:
                     avatar.value?.kind === 'emoji'
                         ? avatar.value.emoji
@@ -389,6 +397,7 @@ async function addKid() {
         username.value = '';
         usernameEdited.value = false;
         pin.value = '';
+        birthdate.value = '';
         avatar.value = null;
         await loadMembers();
     } catch (e) {
@@ -461,6 +470,14 @@ onMounted(async () => {
                     :value.prop="pin"
                     @input="pin = ($event.target as HTMLInputElement).value"
                 />
+                <label class="birth-field">
+                    <span class="avatar-label">Birthday (optional)</span>
+                    <input v-model="birthdate" type="date" class="date-in" />
+                    <span class="muted birth-hint"
+                        >Only used to warn before giving them a risky
+                        chore.</span
+                    >
+                </label>
                 <div class="avatar-field">
                     <span class="avatar-label">Avatar</span>
                     <div class="avatar-row">
@@ -709,6 +726,14 @@ onMounted(async () => {
                                     .value
                             "
                         />
+                        <label class="birth-field">
+                            <span class="avatar-label">Birthday</span>
+                            <input
+                                v-model="editBirthdate"
+                                type="date"
+                                class="date-in"
+                            />
+                        </label>
                         <div class="avatar-field">
                             <span class="avatar-label">Avatar</span>
                             <div class="avatar-row">
@@ -913,7 +938,8 @@ form {
     color: var(--color-brand-primary, #6c4ce0);
     flex: 1;
 }
-.avatar-field {
+.avatar-field,
+.birth-field {
     display: flex;
     flex-direction: column;
     gap: 0.4rem;
@@ -921,6 +947,18 @@ form {
 .avatar-label {
     font-weight: 700;
     font-size: 0.9rem;
+}
+.date-in {
+    padding: 0.6rem 0.5rem;
+    border: 2px solid var(--color-surface-muted, #e6e0f5);
+    border-radius: var(--radius-md, 0.75rem);
+    background: var(--color-surface, #fff);
+    font: inherit;
+    color: var(--color-text-default);
+    max-width: 12rem;
+}
+.birth-hint {
+    font-size: 0.8rem;
 }
 .avatar-row {
     display: flex;

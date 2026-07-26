@@ -163,6 +163,7 @@ export class KidsService {
         if (dto.avatar_emoji !== undefined)
             patch.avatar_emoji = dto.avatar_emoji;
         if (dto.avatar_url !== undefined) patch.avatar_url = dto.avatar_url;
+        if (dto.birthdate !== undefined) patch.birthdate = dto.birthdate;
 
         if (Object.keys(patch).length) {
             const { error } = await service

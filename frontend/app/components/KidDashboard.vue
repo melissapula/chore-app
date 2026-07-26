@@ -28,6 +28,7 @@ interface Instance {
         chore_type: string;
         est_minutes: number | null;
         category: string | null;
+        eligible_kid_ids: string[] | null;
     } | null;
 }
 interface LedgerRow {
@@ -79,9 +80,15 @@ let poller: ReturnType<typeof setInterval> | null = null;
 let channel: RealtimeChannel | null = null;
 
 // --- derived chore lists ---
+// Only OPEN paid chores this kid is eligible for (SPEC §3b): a null list = open
+// to all; otherwise the kid must be listed. (The claim RPC enforces this too.)
 const upForGrabs = computed(() =>
     pool.value.filter(
-        (i) => i.state === 'OPEN' && i.chores?.chore_type === 'paid',
+        (i) =>
+            i.state === 'OPEN' &&
+            i.chores?.chore_type === 'paid' &&
+            (i.chores.eligible_kid_ids == null ||
+                i.chores.eligible_kid_ids.includes(props.uid)),
     ),
 );
 const accepted = computed(() =>

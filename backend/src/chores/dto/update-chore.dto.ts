@@ -1,4 +1,5 @@
 import {
+    IsArray,
     IsBoolean,
     IsIn,
     IsInt,
@@ -6,6 +7,7 @@ import {
     IsString,
     IsUUID,
     Min,
+    ValidateIf,
 } from 'class-validator';
 
 /**
@@ -47,6 +49,18 @@ export class UpdateChoreDto {
     @IsOptional()
     @IsBoolean()
     gates_pay?: boolean;
+
+    // §3b risky flag (paid or required).
+    @IsOptional()
+    @IsBoolean()
+    is_risky?: boolean;
+
+    // §3b paid eligibility. null clears it → open to all kids.
+    @IsOptional()
+    @ValidateIf((_o, v) => v !== null)
+    @IsArray()
+    @IsUUID('all', { each: true })
+    eligible_kid_ids?: string[] | null;
 
     @IsOptional()
     @IsBoolean()

@@ -1,4 +1,5 @@
 import {
+    IsDateString,
     IsOptional,
     IsString,
     Matches,
@@ -39,4 +40,10 @@ export class UpdateKidDto {
     @ValidateIf((_o, v) => v !== null)
     @IsString()
     avatar_url?: string | null;
+
+    // §3b: powers the risky-chore age warning. null clears it.
+    @IsOptional()
+    @ValidateIf((_o, v) => v !== null)
+    @IsDateString()
+    birthdate?: string | null;
 }

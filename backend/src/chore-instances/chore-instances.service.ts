@@ -71,7 +71,7 @@ export class ChoreInstancesService {
         const { data, error } = (await db
             .from('chore_instances')
             .select(
-                '*, chores(title, icon_emoji, chore_type, est_minutes, category)',
+                '*, chores(title, icon_emoji, chore_type, est_minutes, category, eligible_kid_ids)',
             )
             .order('created_at', { ascending: false })) as DbResult<
             InstanceListRow[]

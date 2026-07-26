@@ -64,5 +64,6 @@ export interface InstanceListRow extends ChoreInstanceRow {
         chore_type: string;
         est_minutes: number | null;
         category: string | null;
+        eligible_kid_ids: string[] | null;
     } | null;
 }

@@ -15,8 +15,10 @@ interface Chore {
     chore_type: 'paid' | 'required';
     value_cents: number;
     assigned_kid_id: string | null;
+    eligible_kid_ids: string[] | null;
     due_type: string | null;
     gates_pay: boolean;
+    is_risky: boolean;
     active: boolean;
 }
 
@@ -38,7 +40,11 @@ interface Instance {
 interface Kid {
     id: string;
     display_name: string;
+    birthdate: string | null;
 }
+
+// SPEC §3b: the risky-chore warning only fires for kids under this age.
+const RISKY_AGE = 12;
 
 const templates = ref<Chore[]>([]);
 const pool = ref<Instance[]>([]);
@@ -68,6 +74,10 @@ const isCustom = ref(false); // paid: chose "Create a custom chore" → editable
 const assignedKid = ref('');
 const dueType = ref<'end_of_day' | 'end_of_week'>('end_of_day');
 const gatesPay = ref(false);
+const eligible = ref<string[]>([]); // paid: checked kids; empty/all = open to everyone
+const isRisky = ref(false);
+const riskyPrompt = ref<string | null>(null); // names awaiting the young-kid confirm
+const riskyConfirmed = ref(false);
 const creating = ref(false);
 
 // edit-template state (inline)
@@ -79,6 +89,10 @@ const editXp = ref<number | null>(null);
 const editAssignee = ref('');
 const editDue = ref<'end_of_day' | 'end_of_week'>('end_of_day');
 const editGates = ref(false);
+const editEligible = ref<string[]>([]);
+const editRisky = ref(false);
+const editRiskyPrompt = ref<string | null>(null);
+const editRiskyConfirmed = ref(false);
 const savingEdit = ref(false);
 const editXpDisplay = computed(() =>
     editXp.value === null ? '' : String(editXp.value),
@@ -90,6 +104,39 @@ const xpDisplay = computed(() => (xp.value === null ? '' : String(xp.value)));
 function kidName(id: string | null): string {
     if (!id) return 'a kid';
     return kids.value.find((k) => k.id === id)?.display_name ?? 'a kid';
+}
+
+function ageYears(birthdate: string): number {
+    const b = new Date(birthdate);
+    const now = new Date();
+    let age = now.getFullYear() - b.getFullYear();
+    const m = now.getMonth() - b.getMonth();
+    if (m < 0 || (m === 0 && now.getDate() < b.getDate())) age--;
+    return age;
+}
+// A warning only fires when we KNOW the kid is young (birthdate set + < RISKY_AGE).
+function isYoung(k: Kid): boolean {
+    return !!k.birthdate && ageYears(k.birthdate) < RISKY_AGE;
+}
+// Effective paid eligibility: empty OR everyone selected → null (open to all).
+function effectiveEligible(sel: string[]): string[] | null {
+    if (sel.length === 0 || sel.length >= kids.value.length) return null;
+    return [...sel];
+}
+// Young kids this chore would be made available to (SPEC §3b risky net).
+function youngAffected(
+    risky: boolean,
+    type: 'paid' | 'required',
+    assigneeId: string,
+    sel: string[],
+): Kid[] {
+    if (!risky) return [];
+    if (type === 'required') {
+        const k = kids.value.find((x) => x.id === assigneeId);
+        return k && isYoung(k) ? [k] : [];
+    }
+    const ids = effectiveEligible(sel) ?? kids.value.map((k) => k.id);
+    return kids.value.filter((k) => ids.includes(k.id) && isYoung(k));
 }
 
 // Fill the paid form from a picked preset (gamified chore, or a custom one).
@@ -112,6 +159,10 @@ function switchType(t: 'paid' | 'required') {
     emoji.value = '';
     xp.value = null;
     isCustom.value = false;
+    eligible.value = [];
+    isRisky.value = false;
+    riskyPrompt.value = null;
+    riskyConfirmed.value = false;
     error.value = null;
 }
 
@@ -150,9 +201,14 @@ async function loadAll(silent = false) {
 async function loadKids() {
     const { data } = await supabase
         .from('users')
-        .select('id, display_name, role')
+        .select('id, display_name, role, birthdate')
         .eq('role', 'kid');
     kids.value = (data ?? []) as Kid[];
+}
+
+function confirmRisky() {
+    riskyConfirmed.value = true;
+    void createChore();
 }
 
 async function createChore() {
@@ -165,6 +221,17 @@ async function createChore() {
         error.value = 'Pick which kid this required chore is for.';
         return;
     }
+    // §3b: a risky chore aimed at a young kid needs a soft confirmation first.
+    const young = youngAffected(
+        isRisky.value,
+        choreType.value,
+        assignedKid.value,
+        eligible.value,
+    );
+    if (young.length && !riskyConfirmed.value) {
+        riskyPrompt.value = young.map((k) => k.display_name).join(', ');
+        return;
+    }
     creating.value = true;
     try {
         const body =
@@ -175,6 +242,8 @@ async function createChore() {
                       icon_emoji: emoji.value.trim() || undefined,
                       value_cents:
                           xp.value && xp.value > 0 ? Math.round(xp.value) : 0,
+                      is_risky: isRisky.value,
+                      eligible_kid_ids: effectiveEligible(eligible.value),
                   }
                 : {
                       title: title.value.trim(),
@@ -183,6 +252,7 @@ async function createChore() {
                       assigned_kid_id: assignedKid.value,
                       due_type: dueType.value,
                       gates_pay: gatesPay.value,
+                      is_risky: isRisky.value,
                   };
         await authFetch<Chore>('/chores', { method: 'POST', body });
         title.value = '';
@@ -190,6 +260,10 @@ async function createChore() {
         xp.value = null;
         isCustom.value = false;
         gatesPay.value = false;
+        eligible.value = [];
+        isRisky.value = false;
+        riskyPrompt.value = null;
+        riskyConfirmed.value = false;
         await loadAll();
     } catch (e) {
         error.value = apiMessage(e);
@@ -207,10 +281,19 @@ function startEdit(c: Chore) {
     editAssignee.value = c.assigned_kid_id ?? '';
     editDue.value = c.due_type === 'end_of_week' ? 'end_of_week' : 'end_of_day';
     editGates.value = c.gates_pay;
+    editEligible.value = c.eligible_kid_ids ? [...c.eligible_kid_ids] : [];
+    editRisky.value = c.is_risky;
+    editRiskyPrompt.value = null;
+    editRiskyConfirmed.value = false;
     error.value = null;
 }
 function cancelEdit() {
     editId.value = null;
+    editRiskyPrompt.value = null;
+}
+function confirmEditRisky() {
+    editRiskyConfirmed.value = true;
+    void saveEdit();
 }
 async function saveEdit() {
     if (!editId.value) return;
@@ -221,6 +304,16 @@ async function saveEdit() {
     }
     if (editType.value === 'required' && !editAssignee.value) {
         error.value = 'Pick which kid this required chore is for.';
+        return;
+    }
+    const young = youngAffected(
+        editRisky.value,
+        editType.value,
+        editAssignee.value,
+        editEligible.value,
+    );
+    if (young.length && !editRiskyConfirmed.value) {
+        editRiskyPrompt.value = young.map((k) => k.display_name).join(', ');
         return;
     }
     savingEdit.value = true;
@@ -234,6 +327,8 @@ async function saveEdit() {
                           editXp.value && editXp.value > 0
                               ? Math.round(editXp.value)
                               : 0,
+                      is_risky: editRisky.value,
+                      eligible_kid_ids: effectiveEligible(editEligible.value),
                   }
                 : {
                       title: editTitle.value.trim(),
@@ -241,9 +336,12 @@ async function saveEdit() {
                       assigned_kid_id: editAssignee.value,
                       due_type: editDue.value,
                       gates_pay: editGates.value,
+                      is_risky: editRisky.value,
                   };
         await authFetch(`/chores/${editId.value}`, { method: 'PATCH', body });
         editId.value = null;
+        editRiskyPrompt.value = null;
+        editRiskyConfirmed.value = false;
         await loadAll();
     } catch (e) {
         error.value = apiMessage(e);
@@ -411,6 +509,36 @@ onUnmounted(() => {
                             "
                         />
                     </div>
+
+                    <!-- §3b eligibility: which kids may claim it -->
+                    <div
+                        v-if="(isCustom || title) && kids.length"
+                        class="field"
+                    >
+                        <span class="field-label">Who can claim this?</span>
+                        <p class="muted small">
+                            Leave all unchecked to let any kid claim it.
+                        </p>
+                        <label
+                            v-for="k in kids"
+                            :key="k.id"
+                            class="check-field"
+                        >
+                            <input
+                                v-model="eligible"
+                                type="checkbox"
+                                :value="k.id"
+                            />
+                            <span>{{ k.display_name }}</span>
+                        </label>
+                    </div>
+                    <label v-if="isCustom || title" class="check-field">
+                        <input v-model="isRisky" type="checkbox" />
+                        <span
+                            >⚠️ Risky — warn before making it available to a
+                            young kid</span
+                        >
+                    </label>
                 </template>
 
                 <!-- REQUIRED: name + assignee + due + pay gate -->
@@ -457,6 +585,13 @@ onUnmounted(() => {
                             for review</span
                         >
                     </label>
+                    <label class="check-field">
+                        <input v-model="isRisky" type="checkbox" />
+                        <span
+                            >⚠️ Risky — warn before assigning to a young
+                            kid</span
+                        >
+                    </label>
                     <p v-if="!kids.length" class="muted small">
                         Add a kid on the Family page first — required chores are
                         assigned to a specific kid.
@@ -470,6 +605,26 @@ onUnmounted(() => {
                 >
                     {{ creating ? 'Adding…' : 'Add chore' }}
                 </mfp-button>
+
+                <!-- §3b soft confirmation before a risky chore reaches a young kid -->
+                <div v-if="riskyPrompt" class="risky-confirm">
+                    <span class="risky-q">
+                        ⚠️ This chore is marked risky, and {{ riskyPrompt }} may
+                        be under {{ RISKY_AGE }}. Make it available anyway?
+                    </span>
+                    <div class="risky-btns">
+                        <mfp-button
+                            variant="danger"
+                            :disabled="creating"
+                            @click="confirmRisky"
+                        >
+                            Add it anyway
+                        </mfp-button>
+                        <mfp-button variant="ghost" @click="riskyPrompt = null">
+                            Cancel
+                        </mfp-button>
+                    </div>
+                </div>
             </form>
         </section>
 
@@ -591,6 +746,37 @@ onUnmounted(() => {
                                 >
                             </label>
                         </template>
+
+                        <!-- §3b eligibility + risky (edit) -->
+                        <div
+                            v-if="editType === 'paid' && kids.length"
+                            class="field"
+                        >
+                            <span class="field-label">Who can claim this?</span>
+                            <p class="muted small">
+                                Leave all unchecked to let any kid claim it.
+                            </p>
+                            <label
+                                v-for="k in kids"
+                                :key="k.id"
+                                class="check-field"
+                            >
+                                <input
+                                    v-model="editEligible"
+                                    type="checkbox"
+                                    :value="k.id"
+                                />
+                                <span>{{ k.display_name }}</span>
+                            </label>
+                        </div>
+                        <label class="check-field">
+                            <input v-model="editRisky" type="checkbox" />
+                            <span
+                                >⚠️ Risky — warn before making it available to a
+                                young kid</span
+                            >
+                        </label>
+
                         <div class="edit-actions">
                             <mfp-button
                                 variant="primary"
@@ -602,6 +788,30 @@ onUnmounted(() => {
                             <mfp-button variant="ghost" @click="cancelEdit">
                                 Cancel
                             </mfp-button>
+                        </div>
+
+                        <!-- §3b soft confirmation (edit) -->
+                        <div v-if="editRiskyPrompt" class="risky-confirm">
+                            <span class="risky-q">
+                                ⚠️ This chore is marked risky, and
+                                {{ editRiskyPrompt }} may be under
+                                {{ RISKY_AGE }}. Save it anyway?
+                            </span>
+                            <div class="risky-btns">
+                                <mfp-button
+                                    variant="danger"
+                                    :disabled="savingEdit"
+                                    @click="confirmEditRisky"
+                                >
+                                    Save anyway
+                                </mfp-button>
+                                <mfp-button
+                                    variant="ghost"
+                                    @click="editRiskyPrompt = null"
+                                >
+                                    Cancel
+                                </mfp-button>
+                            </div>
                         </div>
 
                         <!-- Archive: soft-retire a chore without deleting it -->
@@ -1012,6 +1222,24 @@ form {
 }
 .archived-item {
     opacity: 0.7;
+}
+.risky-confirm {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.6rem 0.75rem;
+    border-radius: var(--radius-md, 0.75rem);
+    background: #fff4e0;
+    border: 1px solid #ffd591;
+}
+.risky-q {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #a5510a;
+}
+.risky-btns {
+    display: flex;
+    gap: 0.5rem;
 }
 .icon {
     font-size: 1.5rem;
