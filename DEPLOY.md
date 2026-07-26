@@ -1,4 +1,4 @@
-# Deploying ChoreQuest (Railway + Vercel + Supabase)
+# Deploying ChoreQuest (Vercel + Supabase + a Node backend)
 
 Goal: get a live, HTTPS URL your family can open on their phones and **Add to Home
 Screen** as an installable app.
@@ -8,13 +8,35 @@ The app is three pieces. One is already live:
 | Piece                | Where it runs                        | Status                          |
 | -------------------- | ------------------------------------ | ------------------------------- |
 | **Database + Auth**  | Supabase (shared Frula project)      | ✅ already live (migrations applied, `chore` schema exposed) |
-| **Backend API + cron** | **Railway** (always-on Node)       | set up in Part A                |
+| **Backend API + cron** | **Render (free)** for testing, or **Railway** (always-on) for real | set up in Part A |
 | **Frontend PWA**     | **Vercel** (free tier)               | set up in Part B                |
 
-> **Why the backend needs an always-on host:** it runs a per-minute timer sweep
-> (`@Cron(EVERY_MINUTE)`) that flips expired claim/finish timers and overdue
-> required chores → MISSED. A host that sleeps when idle would freeze those timers,
-> so we use Railway (stays awake), not a sleep-on-idle free tier.
+## Pick your path first
+
+There are two ways to host the backend, and you can start free:
+
+- **🧪 Testing path — Render free tier ($0).** Recommended for validating the app
+  with your family. The backend **sleeps when idle and wakes on the first tap**
+  (~30–50s cold start, then snappy for the rest of the session). Everything in the
+  core loop works: adding kids, the claim race, start/submit/approve, XP, levels,
+  quests, guild. The only thing that doesn't run reliably is the **per-minute timer
+  sweep** — see the box below; it's background hygiene, not the core loop.
+- **🚀 Always-on path — Railway (~$5/mo).** For when the app is solid and you want
+  the timer sweep running 24/7. Same steps, different host.
+
+> **What the always-on timer sweep actually does** (`@Cron(EVERY_MINUTE)`), and what
+> you lose on the free/testing path when it doesn't run:
+>
+> 1. **Abandoned claim → back to OPEN** (a kid claimed but never started). Without
+>    it a claim can get stuck — but the parent has a manual **Release** button to
+>    free it.
+> 2. **Finish-timer expired → ping the parent** (a notification only, no state change).
+> 3. **Overdue required chore → MISSED** (feeds the weekly pay gate). Without it,
+>    overdue required chores don't auto-mark missed.
+>
+> None of these break the core experience, so the free path is fine for testing.
+> The **"chore already taken → show a message + refresh"** behavior is *not* part of
+> the sweep — it's an atomic claim check that always works, on either path.
 
 You'll deploy the **backend first** (to get its URL), then the **frontend**
 (pointing at that URL), then do one small **wire-up + redeploy** so CORS and
@@ -38,41 +60,68 @@ Find the Supabase keys in the Supabase dashboard → your Frula project →
 
 **Which branch ships?** All the current work is on `chorequest-onboarding-and-chores`.
 Simplest clean setup: merge it to `main` and let both hosts deploy from `main`.
-Or, skip the merge and just point Railway + Vercel at the
+Or, skip the merge and just point your backend host + Vercel at the
 `chorequest-onboarding-and-chores` branch. Either works — just be consistent.
+
+The **same env vars** apply to either backend host below:
+
+| Variable                    | Value                                                        |
+| --------------------------- | ------------------------------------------------------------ |
+| `NODE_ENV`                  | `production`                                                  |
+| `SUPABASE_URL`              | your Frula project URL                                        |
+| `SUPABASE_ANON_KEY`         | your anon key                                                 |
+| `SUPABASE_SERVICE_ROLE_KEY` | your service-role key (secret)                                |
+| `VAPID_PUBLIC_KEY`          | your VAPID public key (optional)                              |
+| `VAPID_PRIVATE_KEY`         | your VAPID private key (optional, secret)                    |
+| `VAPID_SUBJECT`             | `mailto:you@example.com` (optional)                          |
+| `FRONTEND_ORIGIN`           | **leave blank for now** — you'll set it in Part C            |
+
+> Don't set `PORT` — both hosts inject it automatically and the app reads it.
+> `NODE_ENV=production` **and** `FRONTEND_ORIGIN` are both required; the app
+> refuses to boot in production without a `FRONTEND_ORIGIN`, so it will only start
+> cleanly after Part C. That's expected.
 
 ---
 
-## Part A — Backend on Railway
+## Part A — Backend
+
+Do **one** of A1 (free, for testing) or A2 (always-on, for real). Both use the same
+`backend/railway.json`/Nixpacks build; both end by giving you a backend URL that
+becomes your `API_BASE` in Part B.
+
+### A1 — Render free tier (🧪 testing, $0)
+
+1. Go to **render.com** and sign in with GitHub.
+2. **New → Web Service →** connect your `chore-app` repo.
+3. Settings:
+   - **Root Directory:** `backend` ← important (this is a monorepo).
+   - **Branch:** the branch you chose above.
+   - **Build Command:** `npm install && npm run build`
+   - **Start Command:** `npm run start:prod`
+   - **Instance Type:** **Free**.
+4. Add the env vars from the table above (**Environment** section).
+5. Create the service. Render gives you a URL like
+   `https://chorequest-backend.onrender.com`. **This is your `API_BASE`.**
+
+   > On Free, the service **sleeps after ~15 min idle** and cold-starts (~30–50s)
+   > on the next request — so the first tap of a family session is slow, then it's
+   > fast. The per-minute timer sweep won't run while asleep; that's the expected
+   > trade for $0 (see the sweep box at the top). When you're ready for always-on,
+   > either bump this service to Render's paid **Starter** plan or switch to A2.
+
+### A2 — Railway always-on (🚀 for real, ~$5/mo)
 
 1. Go to **railway.app** and sign in with GitHub.
 2. **New Project → Deploy from GitHub repo →** pick your `chore-app` repo.
 3. Open the created service → **Settings**:
-   - **Root Directory:** `backend` ← important (this is a monorepo).
+   - **Root Directory:** `backend` ← important.
    - **Branch:** the branch you chose above.
    - Build/Start are already handled by `backend/railway.json`
      (`npm run build` then `npm run start:prod`). You don't need to type commands.
-4. Go to the service's **Variables** tab and add:
-
-   | Variable                    | Value                                                        |
-   | --------------------------- | ------------------------------------------------------------ |
-   | `NODE_ENV`                  | `production`                                                  |
-   | `SUPABASE_URL`              | your Frula project URL                                        |
-   | `SUPABASE_ANON_KEY`         | your anon key                                                 |
-   | `SUPABASE_SERVICE_ROLE_KEY` | your service-role key (secret)                                |
-   | `VAPID_PUBLIC_KEY`          | your VAPID public key (optional)                              |
-   | `VAPID_PRIVATE_KEY`         | your VAPID private key (optional, secret)                    |
-   | `VAPID_SUBJECT`             | `mailto:you@example.com` (optional)                          |
-   | `FRONTEND_ORIGIN`           | **leave blank for now** — you'll set it in Part C            |
-
-   > Don't set `PORT` — Railway injects it automatically and the app reads it.
-   > `NODE_ENV=production` **and** `FRONTEND_ORIGIN` are both required; the app
-   > refuses to boot in production without a `FRONTEND_ORIGIN`, so it will only
-   > start cleanly after Part C. That's expected.
-
-5. Under **Settings → Networking**, click **Generate Domain**. Copy the URL —
+4. **Variables** tab → add the env vars from the table above.
+5. **Settings → Networking → Generate Domain.** Copy the URL —
    e.g. `https://chorequest-backend-production.up.railway.app`.
-   **This is your `API_BASE`.** Save it for Part B.
+   **This is your `API_BASE`.**
 
 ---
 
@@ -91,7 +140,7 @@ Or, skip the merge and just point Railway + Vercel at the
    | -------------- | ------------------------------------------------- |
    | `SUPABASE_URL` | your Frula project URL                            |
    | `SUPABASE_KEY` | your anon key (same value as the backend's ANON)  |
-   | `API_BASE`     | the Railway URL from Part A step 5                 |
+   | `API_BASE`     | your backend URL from Part A (Render or Railway)   |
 
    > `API_BASE` is baked into the app at build time, so it must be set **before**
    > this first deploy. If you change it later, redeploy the frontend.
@@ -105,9 +154,9 @@ Or, skip the merge and just point Railway + Vercel at the
 
 Now that both URLs exist, connect them:
 
-1. **Railway → your backend → Variables:** set
+1. **Your backend host (Render or Railway) → Variables/Environment:** set
    `FRONTEND_ORIGIN` = your Vercel URL (e.g. `https://chorequest.vercel.app`,
-   no trailing slash). Railway redeploys automatically. The backend now boots
+   no trailing slash). The host redeploys automatically. The backend now boots
    cleanly and allows CORS from your site.
 
 2. **Supabase → Frula project → Authentication → URL Configuration:**
@@ -130,7 +179,23 @@ The frontend is an installable PWA served over HTTPS, so no app store needed:
 
 It then launches full-screen like a native app. To turn on push notifications,
 each person taps **Enable notifications** on their dashboard (requires the VAPID
-keys to be set on Railway).
+keys to be set on the backend host).
+
+---
+
+## When you're ready to go always-on
+
+Two options once testing is done and you want the timer sweep running for real:
+
+1. **Upgrade the host** — bump Render Free → Starter, or switch to Railway (Part A2).
+   Zero code change; the in-app `@Cron(EVERY_MINUTE)` sweep just starts running 24/7.
+2. **Move the sweep into Postgres with `pg_cron`** (the cleaner long-term fix — then
+   you *never* need an always-on Node server, even in production). Supabase supports
+   the `pg_cron` extension: port the three sweep queries from
+   `backend/src/timers/timers.service.ts` into a SQL function and schedule it
+   `EVERY_MINUTE`. The backend can then live on a free sleep-when-idle host forever,
+   because the database wakes itself to run the cleanup. This is a small, self-contained
+   task — worth doing before the Google Play (Capacitor) wrap, not before family testing.
 
 ---
 
@@ -138,7 +203,7 @@ keys to be set on Railway).
 
 Both hosts redeploy automatically on every push to the deploy branch:
 
-- Push code → Vercel rebuilds the frontend, Railway rebuilds the backend.
+- Push code → Vercel rebuilds the frontend, your backend host rebuilds the backend.
 - **Database changes** (new files in `supabase/migrations/`) are **not** automatic —
   apply new migrations yourself in the Supabase SQL editor / CLI, same as during
   development. Remember the one-time "expose the `chore` schema" step is already
@@ -149,9 +214,12 @@ Both hosts redeploy automatically on every push to the deploy branch:
 - **Login page loads but sign-up email link errors** → Supabase redirect URL not
   set (Part C step 2).
 - **App loads but every action fails / CORS errors in the browser console** →
-  `FRONTEND_ORIGIN` on Railway doesn't exactly match the Vercel URL (Part C step 1),
-  or `API_BASE` on Vercel is wrong/stale (rebuild frontend after changing it).
-- **Backend won't start on Railway** → check `NODE_ENV=production` and
-  `FRONTEND_ORIGIN` are both set; the app intentionally refuses to boot without them.
-- **Timers never expire** → the backend went to sleep. On Railway it shouldn't;
-  confirm the service is on a plan that stays running (not scaled to zero).
+  `FRONTEND_ORIGIN` on the backend doesn't exactly match the Vercel URL (Part C
+  step 1), or `API_BASE` on Vercel is wrong/stale (rebuild frontend after changing it).
+- **First tap of a session is slow (~30–50s), then fine** → normal on Render Free;
+  the backend was asleep and is waking. Go always-on to remove it.
+- **Backend won't start** → check `NODE_ENV=production` and `FRONTEND_ORIGIN` are
+  both set; the app intentionally refuses to boot without them.
+- **Timers never auto-resolve** (stuck claims, overdue chores not going MISSED) →
+  the per-minute sweep isn't running: expected on Render Free. Use the parent
+  **Release** button meanwhile, or go always-on / `pg_cron`.
