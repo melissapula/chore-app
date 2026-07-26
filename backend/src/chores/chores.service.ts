@@ -7,6 +7,7 @@ import {
 import { SupabaseService } from '../supabase/supabase.service';
 import { AuthUser } from '../auth/auth-user.interface';
 import { CreateChoreDto } from './dto/create-chore.dto';
+import { UpdateChoreDto } from './dto/update-chore.dto';
 import { ChoreInstanceRow, ChoreRow, DbResult } from '../db-types';
 
 @Injectable()
@@ -51,6 +52,24 @@ export class ChoresService {
             .select()
             .single()) as DbResult<ChoreRow>;
         if (error) throw new BadRequestException(error.message);
+        return data;
+    }
+
+    /** Edit a chore template (parent). Only the provided fields change. */
+    async update(user: AuthUser, id: string, dto: UpdateChoreDto) {
+        this.assertParent(user);
+        if (Object.keys(dto).length === 0) {
+            throw new BadRequestException('Nothing to update');
+        }
+        const db = this.supabase.userClient(user.accessToken);
+        const { data, error } = (await db
+            .from('chores')
+            .update(dto)
+            .eq('id', id)
+            .select()
+            .maybeSingle()) as DbResult<ChoreRow>;
+        if (error) throw new BadRequestException(error.message);
+        if (!data) throw new NotFoundException('Chore not found');
         return data;
     }
 

@@ -60,6 +60,20 @@ const dueType = ref<'end_of_day' | 'end_of_week'>('end_of_day');
 const gatesPay = ref(false);
 const creating = ref(false);
 
+// edit-template state (inline)
+const editId = ref<string | null>(null);
+const editType = ref<'paid' | 'required'>('paid');
+const editTitle = ref('');
+const editEmoji = ref('');
+const editXp = ref<number | null>(null);
+const editAssignee = ref('');
+const editDue = ref<'end_of_day' | 'end_of_week'>('end_of_day');
+const editGates = ref(false);
+const savingEdit = ref(false);
+const editXpDisplay = computed(() =>
+    editXp.value === null ? '' : String(editXp.value),
+);
+
 // mfp-input wants a string value; render the numeric XP (or empty) for binding.
 const xpDisplay = computed(() => (xp.value === null ? '' : String(xp.value)));
 
@@ -171,6 +185,60 @@ async function createChore() {
         error.value = apiMessage(e);
     }
     creating.value = false;
+}
+
+// --- edit an existing template (inline) ---
+function startEdit(c: Chore) {
+    editId.value = c.id;
+    editType.value = c.chore_type;
+    editTitle.value = c.title;
+    editEmoji.value = c.icon_emoji ?? '';
+    editXp.value = c.value_cents || null;
+    editAssignee.value = c.assigned_kid_id ?? '';
+    editDue.value = c.due_type === 'end_of_week' ? 'end_of_week' : 'end_of_day';
+    editGates.value = c.gates_pay;
+    error.value = null;
+}
+function cancelEdit() {
+    editId.value = null;
+}
+async function saveEdit() {
+    if (!editId.value) return;
+    error.value = null;
+    if (!editTitle.value.trim()) {
+        error.value = 'Give the chore a name.';
+        return;
+    }
+    if (editType.value === 'required' && !editAssignee.value) {
+        error.value = 'Pick which kid this required chore is for.';
+        return;
+    }
+    savingEdit.value = true;
+    try {
+        const body =
+            editType.value === 'paid'
+                ? {
+                      title: editTitle.value.trim(),
+                      icon_emoji: editEmoji.value.trim() || undefined,
+                      value_cents:
+                          editXp.value && editXp.value > 0
+                              ? Math.round(editXp.value)
+                              : 0,
+                  }
+                : {
+                      title: editTitle.value.trim(),
+                      icon_emoji: editEmoji.value.trim() || undefined,
+                      assigned_kid_id: editAssignee.value,
+                      due_type: editDue.value,
+                      gates_pay: editGates.value,
+                  };
+        await authFetch(`/chores/${editId.value}`, { method: 'PATCH', body });
+        editId.value = null;
+        await loadAll();
+    } catch (e) {
+        error.value = apiMessage(e);
+    }
+    savingEdit.value = false;
 }
 
 // Spawn a live instance: paid → OPEN pool; required → ASSIGNED to its kid.
@@ -385,27 +453,125 @@ onUnmounted(() => {
                 No chores yet — create your first one above.
             </p>
             <ul v-else class="list">
-                <li v-for="c in templates" :key="c.id" class="item">
-                    <span class="icon">{{ c.icon_emoji || '📋' }}</span>
-                    <span class="grow">
-                        <strong>{{ c.title }}</strong>
-                        <span v-if="c.chore_type === 'paid'" class="xp"
-                            >{{ c.value_cents }} XP</span
-                        >
-                        <span v-else class="req-sub">
-                            Required · for {{ kidName(c.assigned_kid_id)
-                            }}<template v-if="c.gates_pay">
-                                · 🔒 gates pay</template
+                <li v-for="c in templates" :key="c.id" class="tmpl-item">
+                    <div class="item">
+                        <span class="icon">{{ c.icon_emoji || '📋' }}</span>
+                        <span class="grow">
+                            <strong>{{ c.title }}</strong>
+                            <span v-if="c.chore_type === 'paid'" class="xp"
+                                >{{ c.value_cents }} XP</span
                             >
+                            <span v-else class="req-sub">
+                                Required · for {{ kidName(c.assigned_kid_id)
+                                }}<template v-if="c.gates_pay">
+                                    · 🔒 gates pay</template
+                                >
+                            </span>
                         </span>
-                    </span>
-                    <mfp-button
-                        variant="secondary"
-                        :disabled="busyId === c.id"
-                        @click="addToPool(c.id)"
-                    >
-                        {{ c.chore_type === 'paid' ? 'Add to pool' : 'Assign' }}
-                    </mfp-button>
+                        <button
+                            class="notes-toggle"
+                            aria-label="Edit chore"
+                            title="Edit"
+                            @click="
+                                editId === c.id ? cancelEdit() : startEdit(c)
+                            "
+                        >
+                            ✏️
+                        </button>
+                        <mfp-button
+                            variant="secondary"
+                            :disabled="busyId === c.id"
+                            @click="addToPool(c.id)"
+                        >
+                            {{
+                                c.chore_type === 'paid'
+                                    ? 'Add to pool'
+                                    : 'Assign'
+                            }}
+                        </mfp-button>
+                    </div>
+
+                    <!-- Inline edit -->
+                    <div v-if="editId === c.id" class="edit-panel">
+                        <mfp-input
+                            label="Name"
+                            name="editName"
+                            :value.prop="editTitle"
+                            @input="
+                                editTitle = ($event.target as HTMLInputElement)
+                                    .value
+                            "
+                        />
+                        <div class="row">
+                            <div class="icon-col">
+                                <span class="field-label">Icon</span>
+                                <EmojiField v-model="editEmoji" />
+                            </div>
+                            <mfp-input
+                                v-if="editType === 'paid'"
+                                class="xp-in"
+                                label="XP reward"
+                                name="editXp"
+                                type="number"
+                                inputmode="numeric"
+                                :value.prop="editXpDisplay"
+                                @input="
+                                    editXp =
+                                        Number(
+                                            ($event.target as HTMLInputElement)
+                                                .value,
+                                        ) || null
+                                "
+                            />
+                            <label v-else class="field grow-field">
+                                <span class="field-label">Assign to</span>
+                                <select v-model="editAssignee" class="select">
+                                    <option value="" disabled>
+                                        Pick a kid…
+                                    </option>
+                                    <option
+                                        v-for="k in kids"
+                                        :key="k.id"
+                                        :value="k.id"
+                                    >
+                                        {{ k.display_name }}
+                                    </option>
+                                </select>
+                            </label>
+                        </div>
+                        <template v-if="editType === 'required'">
+                            <label class="field">
+                                <span class="field-label">Due</span>
+                                <select v-model="editDue" class="select">
+                                    <option value="end_of_day">
+                                        End of day
+                                    </option>
+                                    <option value="end_of_week">
+                                        End of week
+                                    </option>
+                                </select>
+                            </label>
+                            <label class="check-field">
+                                <input v-model="editGates" type="checkbox" />
+                                <span
+                                    >Gates pay — if missed, holds this week's
+                                    earnings for review</span
+                                >
+                            </label>
+                        </template>
+                        <div class="edit-actions">
+                            <mfp-button
+                                variant="primary"
+                                :disabled="savingEdit"
+                                @click="saveEdit"
+                            >
+                                {{ savingEdit ? 'Saving…' : 'Save changes' }}
+                            </mfp-button>
+                            <mfp-button variant="ghost" @click="cancelEdit">
+                                Cancel
+                            </mfp-button>
+                        </div>
+                    </div>
                 </li>
             </ul>
         </section>
@@ -652,9 +818,23 @@ form {
     flex-direction: column;
     gap: 0.5rem;
 }
-.live-item {
+.live-item,
+.tmpl-item {
     display: flex;
     flex-direction: column;
+}
+.edit-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+    padding: 0.75rem;
+    border-radius: var(--radius-md, 0.75rem);
+    background: var(--color-brand-subtle, #efe7ff);
+}
+.edit-actions {
+    display: flex;
+    gap: 0.5rem;
 }
 .item {
     display: flex;
