@@ -92,8 +92,9 @@ export class ChoresService {
 
     /**
      * end-of-day / end-of-week due date for a required instance (SPEC §3a).
-     * No timezone is stored yet, so this uses the server clock — good enough for
-     * a single-family MVP; revisit with a household timezone if it matters.
+     * No timezone is stored yet, so this uses the server clock — set the `TZ`
+     * env var to the family's zone in production (hosts default to UTC).
+     * Revisit with a per-household timezone for multiple families.
      */
     private dueDateFor(dueType: 'end_of_day' | 'end_of_week'): string {
         const d = new Date();

@@ -46,7 +46,7 @@ export class WeeklyGatesService {
         return String(n).padStart(2, '0');
     }
 
-    /** Monday-anchored week bounds for a date (default: now). Server clock. */
+    /** Monday-anchored week bounds for a date (default: now). Server clock — needs `TZ` set in production. */
     private weekBounds(dateStr?: string): WeekBounds {
         const base = dateStr ? new Date(`${dateStr}T12:00:00`) : new Date();
         // A bad `week` param would otherwise NaN through to toISOString() → a 500.
