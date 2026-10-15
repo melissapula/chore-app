@@ -68,6 +68,7 @@ The **same env vars** apply to either backend host below:
 | Variable                    | Value                                                        |
 | --------------------------- | ------------------------------------------------------------ |
 | `NODE_ENV`                  | `production`                                                  |
+| `TZ`                        | your family's time zone, e.g. `America/Chicago` — hosts default to UTC, which makes "end of day" due dates and pay weeks land hours early |
 | `SUPABASE_URL`              | your Frula project URL                                        |
 | `SUPABASE_ANON_KEY`         | your anon key                                                 |
 | `SUPABASE_SERVICE_ROLE_KEY` | your service-role key (secret)                                |
