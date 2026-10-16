@@ -98,12 +98,22 @@ let poller: ReturnType<typeof setInterval> | null = null;
 let channel: RealtimeChannel | null = null;
 
 // --- derived chore lists ---
+// A claim whose start-timer ran out is claimable again even before the sweep
+// resets it to OPEN — the claim RPC treats it as OPEN (migration 0021).
+function isLapsedClaim(i: Instance): boolean {
+    return (
+        i.state === 'CLAIMED' &&
+        !!i.start_deadline &&
+        new Date(i.start_deadline).getTime() <= now.value
+    );
+}
+
 // Only OPEN paid chores this kid is eligible for (SPEC §3b): a null list = open
 // to all; otherwise the kid must be listed. (The claim RPC enforces this too.)
 const upForGrabs = computed(() =>
     pool.value.filter(
         (i) =>
-            i.state === 'OPEN' &&
+            (i.state === 'OPEN' || isLapsedClaim(i)) &&
             i.chores?.chore_type === 'paid' &&
             (i.chores.eligible_kid_ids == null ||
                 i.chores.eligible_kid_ids.includes(props.uid)),
@@ -113,7 +123,8 @@ const accepted = computed(() =>
     pool.value.filter(
         (i) =>
             i.claimed_by === props.uid &&
-            ['CLAIMED', 'IN_PROGRESS', 'SUBMITTED'].includes(i.state),
+            ['CLAIMED', 'IN_PROGRESS', 'SUBMITTED'].includes(i.state) &&
+            !isLapsedClaim(i),
     ),
 );
 const myDone = computed(() =>
