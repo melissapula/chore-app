@@ -38,6 +38,13 @@ export default defineNuxtConfig({
                 { name: 'format-detection', content: 'telephone=no' },
             ],
             link: [
+                // iOS ignores manifest icons and fills transparency with black,
+                // so it gets its own opaque icon.
+                {
+                    rel: 'apple-touch-icon',
+                    href: '/apple-touch-icon-180x180.png',
+                    sizes: '180x180',
+                },
                 // Rounded, kid-legible font used by the playful theme.
                 { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
                 {
@@ -86,6 +93,20 @@ export default defineNuxtConfig({
             background_color: '#fffdfa',
             display: 'standalone',
             start_url: '/',
+            // Android Chrome only offers "Install app" with 192 + 512 icons.
+            // The maskable one sits inside the safe zone on a solid background,
+            // so Android's circle/squircle crop doesn't cut off the artwork.
+            icons: [
+                { src: 'pwa-64x64.png', sizes: '64x64', type: 'image/png' },
+                { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' },
+                { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png' },
+                {
+                    src: 'maskable-icon-512x512.png',
+                    sizes: '512x512',
+                    type: 'image/png',
+                    purpose: 'maskable',
+                },
+            ],
         },
         workbox: {
             navigateFallback: '/',
