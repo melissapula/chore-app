@@ -184,8 +184,8 @@ async function saveKid() {
             'Username must be 2–20 characters: letters, numbers, _ or -.';
         return;
     }
-    if (editPin.value && !/^\d{4,8}$/.test(editPin.value.trim())) {
-        error.value = 'PIN must be 4–8 digits (or leave it blank to keep it).';
+    if (editPin.value && !/^\d{6,8}$/.test(editPin.value.trim())) {
+        error.value = 'PIN must be 6–8 digits (or leave it blank to keep it).';
         return;
     }
     savingKid.value = true;
@@ -369,8 +369,8 @@ async function addKid() {
             'Username must be 2–20 characters: letters, numbers, _ or -.';
         return;
     }
-    if (!/^\d{4,8}$/.test(p)) {
-        error.value = 'PIN must be 4–8 digits.';
+    if (!/^\d{6,8}$/.test(p)) {
+        error.value = 'PIN must be 6–8 digits.';
         return;
     }
     creating.value = true;
@@ -469,11 +469,11 @@ onMounted(async () => {
                     "
                 />
                 <mfp-input
-                    label="PIN (4–8 digits)"
+                    label="PIN (6–8 digits)"
                     name="pin"
                     type="text"
                     inputmode="numeric"
-                    placeholder="1234"
+                    placeholder="123456"
                     :value.prop="pin"
                     @input="pin = ($event.target as HTMLInputElement).value"
                 />

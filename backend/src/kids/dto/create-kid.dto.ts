@@ -24,8 +24,8 @@ export class CreateKidDto {
     })
     username!: string;
 
-    // 4–8 digit PIN. Kept as a string so leading zeros survive.
-    @Matches(/^\d{4,8}$/, { message: 'PIN must be 4–8 digits' })
+    // 6–8 digit PIN (a 4-digit space is too small to resist guessing). Kept as a string so leading zeros survive.
+    @Matches(/^\d{6,8}$/, { message: 'PIN must be 6–8 digits' })
     pin!: string;
 
     @IsOptional()

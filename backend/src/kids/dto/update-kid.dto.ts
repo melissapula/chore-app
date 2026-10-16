@@ -27,7 +27,7 @@ export class UpdateKidDto {
     username?: string;
 
     @IsOptional()
-    @Matches(/^\d{4,8}$/, { message: 'PIN must be 4–8 digits' })
+    @Matches(/^\d{6,8}$/, { message: 'PIN must be 6–8 digits' })
     pin?: string;
 
     // null allowed → clears the field.

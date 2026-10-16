@@ -336,7 +336,7 @@ At a couple dozen chores this is computationally trivial — a simple generator,
 ## 6. Realtime & notifications
 
 - **Supabase Realtime** pushes instance state changes to every phone. Kid claims a chore → it vanishes from siblings' screens live. Solves the "no one else could grab it" sync problem for free.
-- **Web Push** (works in an installed PWA) for: claim expired, chore approved (+50 XP), new note, quest redeemable, guild-quest milestone, a kid's new chore request (to the parent) and its resolution (to the kid), parent-decision-needed on an expired finish-timer.
+- **Web Push** (works in an installed PWA) for: claim expired, chore approved (+50 XP), new note, quest redeemable, guild-quest milestone, a kid's new chore request (to the parent) and its resolution (to the kid), parent-decision-needed on an expired finish-timer. A subscription's `endpoint` must be an https URL on a known browser push service (FCM, Mozilla, Apple, WNS) — enforced by the API and by a DB `CHECK` (migration 0020), since the server POSTs to that URL.
 
 ---
 
@@ -349,7 +349,7 @@ At a couple dozen chores this is computationally trivial — a simple generator,
 **Sign-in.**
 
 - **Parents** use **email + password** (Supabase password auth — sign up, then log in). Real email → self-service password reset later.
-- **Kids** have no email, so a parent creates each kid with a **username + PIN**; the backend admin-creates the kid a Supabase Auth user whose email/password are _derived_ from those (synthesized `<username>@choreq.local` + a PIN-based password), and the kid logs in by re-typing the same username + PIN. A parent can later **edit** a kid (name/avatar update the `users` row; a new username or PIN re-derives and updates the Auth email/password via the admin API) or **delete** a kid (admin-delete the Auth user; the `auth.users → chore.users` cascade removes their profile, ledger, quests, and notes). Both run with the **service role**, same sanctioned path as create.
+- **Kids** have no email, so a parent creates each kid with a **username + PIN**; the backend admin-creates the kid a Supabase Auth user whose email/password are _derived_ from those (synthesized `<username>@choreq.local` + a PIN-based password), and the kid logs in by re-typing the same username + PIN. New and reset PINs are **6–8 digits** (4-digit PINs set before that rule still log in until a parent resets them); Supabase Auth only rate-limits sign-in per IP, so PIN length is the main guard against guessing. A parent can later **edit** a kid (name/avatar update the `users` row; a new username or PIN re-derives and updates the Auth email/password via the admin API) or **delete** a kid (admin-delete the Auth user; the `auth.users → chore.users` cascade removes their profile, ledger, quests, and notes). Both run with the **service role**, same sanctioned path as create.
 - **Co-parents** join an existing household with a **single-use invite code**: an existing parent mints one (`regenerate_join_code()`), the co-parent signs up with their own email + password, then redeems the code (`join_household()`) to get a `parent` row in that household. The code is stored on the household and cleared on use.
 
 Because every user (parent, kid, co-parent) gets a real auth user, RLS (keyed on `auth.uid()`) applies uniformly. **The frontend talks to PostgREST directly for many mutations, so RLS — not the API — is the real boundary; policies must be tight enough to stand alone.** Two rules that follow from that:

@@ -4,6 +4,7 @@ import * as webpush from 'web-push';
 import { SupabaseService } from '../supabase/supabase.service';
 import { AuthUser } from '../auth/auth-user.interface';
 import { SubscriptionDto } from './dto/subscription.dto';
+import { isAllowedPushEndpoint } from './push-endpoint';
 
 export interface PushPayload {
     title: string;
@@ -93,6 +94,13 @@ export class PushService {
         const body = JSON.stringify(payload);
         await Promise.all(
             subs.map(async (s) => {
+                // Rows saved before migration 0020 were never host-checked.
+                if (!isAllowedPushEndpoint(s.endpoint)) {
+                    this.logger.warn(
+                        `skipping push subscription ${s.id}: endpoint host not allowed`,
+                    );
+                    return;
+                }
                 try {
                     await webpush.sendNotification(
                         {
