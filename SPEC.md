@@ -45,7 +45,7 @@ A multi-tenant family chore tracker reskinned as a light RPG. Kids earn **XP** f
 **States:**
 
 - `OPEN` — any eligible kid can claim.
-- `CLAIMED` — one kid holds it. **Start-timer** runs (default 24h). Expires → back to `OPEN`.
+- `CLAIMED` — one kid holds it. **Start-timer** runs (default 24h). Expires → back to `OPEN`: from that moment it can't be started and is claimable again (enforced in the claim/start RPCs, not just by the sweep).
 - `IN_PROGRESS` — kid tapped "started." **Finish-timer** runs (default 2h). Expires → **parent notified to decide** (your choice): extend, release, or approve anyway.
 - `SUBMITTED` — kid says done; awaiting parent.
 - `APPROVED` — balance credited, instance closed.
@@ -196,7 +196,7 @@ Every table below carries a `household_id` for tenant isolation (enforced via Su
 | approved_by          | uuid null        | parent id                                                                                         |
 | value_cents_snapshot | int              | value locked at instance creation (0 for required)                                                |
 
-> **Timers = stored deadlines, not counters.** The backend compares `now()` to the deadline. A cron sweep (every minute, `@nestjs/schedule`) releases expired `CLAIMED` paid instances, notifies parents about expired `IN_PROGRESS` ones, and marks required instances `MISSED` when their `due_date` passes. The UI countdown is just `deadline - now`.
+> **Timers = stored deadlines, not counters.** The backend compares `now()` to the deadline. A cron sweep (every minute, `@nestjs/schedule`) releases expired `CLAIMED` paid instances, notifies parents about expired `IN_PROGRESS` ones, and marks required instances `MISSED` when their `due_date` passes. The UI countdown is just `deadline - now`. Because the sweep can't run while the backend sleeps, the start-timer is also checked lazily: `claim_instance` treats a lapsed `CLAIMED` instance as `OPEN`, and `start_instance` refuses one past its `start_deadline` (migration 0021). The sweep then only tidies state.
 
 ### balances / ledger
 
