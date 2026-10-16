@@ -4,7 +4,12 @@
 // directly.
 export function useApi() {
     const supabase = useSupabaseClient();
-    const base = useRuntimeConfig().public.apiBase as string;
+    // Strip trailing slashes: paths start with `/`, so `API_BASE=https://x/`
+    // would otherwise request `https://x//chores` (a 404).
+    const base = (useRuntimeConfig().public.apiBase as string).replace(
+        /\/+$/,
+        '',
+    );
 
     async function authFetch<T>(
         path: string,

@@ -5,6 +5,7 @@ import { json } from 'express';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { DbErrorFilter } from './common/db-error.filter';
+import { toCorsOrigin } from './common/cors-origin';
 
 async function bootstrap() {
     // Own the body parser so we can size it for avatar data-URL photos.
@@ -23,7 +24,7 @@ async function bootstrap() {
 
     // Fail fast if the allowed origin is unset in production (audit L2) rather
     // than silently falling back to localhost with credentials enabled.
-    const origin = config.get<string>('FRONTEND_ORIGIN');
+    const origin = toCorsOrigin(config.get<string>('FRONTEND_ORIGIN'));
     if (process.env.NODE_ENV === 'production' && !origin) {
         throw new Error('FRONTEND_ORIGIN must be set in production');
     }
