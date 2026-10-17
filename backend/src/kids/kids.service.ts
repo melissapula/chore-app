@@ -115,7 +115,7 @@ export class KidsService {
         const service = this.supabase.serviceClient();
 
         // The target must be a kid in the caller's own household.
-        const { data: kid } = (await service
+        const { data: kid, error: lookupErr } = (await service
             .from('users')
             .select('id, household_id, role, username')
             .eq('id', kidId)
@@ -125,6 +125,9 @@ export class KidsService {
             role: string;
             username: string | null;
         }>;
+        // A failed lookup is a server fault (logged 500), not "not your kid".
+        if (lookupErr)
+            throw new Error(`kids update lookup: ${lookupErr.message}`);
         if (
             !kid ||
             kid.household_id !== parent.householdId ||
@@ -199,7 +202,7 @@ export class KidsService {
         }
         const service = this.supabase.serviceClient();
 
-        const { data: kid } = (await service
+        const { data: kid, error: lookupErr } = (await service
             .from('users')
             .select('id, household_id, role')
             .eq('id', kidId)
@@ -208,6 +211,8 @@ export class KidsService {
             household_id: string;
             role: string;
         }>;
+        if (lookupErr)
+            throw new Error(`kids remove lookup: ${lookupErr.message}`);
         if (
             !kid ||
             kid.household_id !== parent.householdId ||
