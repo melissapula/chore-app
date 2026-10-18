@@ -4,6 +4,7 @@
 // the kid then logs in with the username + PIN shown here. Members are read
 // straight from Supabase (RLS scopes to the household).
 import type { AvatarValue } from '~/types/avatar';
+import type { Database } from '~/types/database.types';
 
 const supabase = useSupabaseClient();
 const { authFetch } = useApi();
@@ -259,7 +260,7 @@ async function saveParent() {
         return;
     }
     savingParent.value = true;
-    const patch: Record<string, unknown> = {
+    const patch: Database['chore']['Tables']['users']['Update'] = {
         display_name: editParentName.value.trim(),
     };
     if (editParentAvatar.value?.kind === 'emoji') {

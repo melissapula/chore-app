@@ -82,7 +82,7 @@ async function submit() {
         error.value = 'What chore do you want to do?';
         return;
     }
-    if (!householdId.value) return;
+    if (!householdId.value || !uid.value) return;
     submitting.value = true;
     const { error: err } = await supabase.from('chore_requests').insert({
         household_id: householdId.value,

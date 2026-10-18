@@ -74,6 +74,10 @@ async function post(body: string) {
 onMounted(async () => {
     const { data } = await supabase.auth.getUser();
     uid.value = data.user?.id ?? null;
+    if (!uid.value) {
+        loading.value = false;
+        return;
+    }
     const [meRes, memRes] = await Promise.all([
         supabase
             .from('users')
