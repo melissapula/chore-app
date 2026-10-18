@@ -274,6 +274,8 @@ The gate is computed **live** (no end-of-week cron yet): per kid, count their
   live project.** The harness (`backend/test/e2e-harness.ts`) refuses any
   `SUPABASE_URL` that isn't `127.0.0.1`/`localhost`, because `ConfigModule` would
   otherwise fill missing keys from `backend/.env`.
+- **Node 24 is pinned** in the root `.nvmrc` (CI + Render) and `engines.node: "24.x"`
+  in all three `package.json` files (Vercel, Railway). Bump them together.
 
 ---
 
