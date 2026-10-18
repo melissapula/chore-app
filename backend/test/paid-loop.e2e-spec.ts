@@ -123,7 +123,7 @@ describe('paid chore loop (e2e)', () => {
         expect(await ledgerFor(instanceId)).toEqual([
             {
                 kid_id: kidId,
-                delta_cents: CHORE_VALUE_CENTS,
+                delta_cents: 151, // DELIBERATE FAILURE: throwaway PR, do not merge
                 reason: 'chore_approved',
             },
         ]);
