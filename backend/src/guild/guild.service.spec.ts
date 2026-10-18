@@ -1,4 +1,8 @@
-import { HttpException } from '@nestjs/common';
+import {
+    BadRequestException,
+    ForbiddenException,
+    HttpException,
+} from '@nestjs/common';
 import { GuildService } from './guild.service';
 import { AuthUser } from '../auth/auth-user.interface';
 import { fakeSupabase, FakeReply } from '../testing/fake-supabase';
@@ -114,20 +118,71 @@ describe('GuildService.current', () => {
 describe('GuildService.create', () => {
     const dto = { title: 'Pizza night', target_xp: 100 };
 
-    it('returns the new guild quest after archiving the old one', async () => {
+    // start_guild_quest() returns the whole chore.quests row.
+    const fullRow = {
+        ...quest,
+        household_id: 'house-1',
+        scope: 'guild',
+        kid_id: null,
+        deadline: null,
+        emoji: null,
+        redeemed_at: null,
+        created_at: '2026-10-01T00:00:00Z',
+    };
+
+    it('returns the new guild quest with only the GuildQuest fields', async () => {
         const { guild } = guildWith({
-            quests: [{ data: null }, { data: quest }],
+            start_guild_quest: [{ data: fullRow }],
         });
 
         await expect(guild.create(parent, dto)).resolves.toEqual(quest);
     });
 
-    it('stops before inserting when archiving the old quest fails', async () => {
+    it('never writes to quests directly (the SQL function archives and inserts atomically)', async () => {
         const { guild, writes } = guildWith({
-            quests: [dbDown, { data: quest }],
+            start_guild_quest: [{ data: fullRow }],
         });
 
+        await guild.create(parent, dto);
+
+        expect(writes).toEqual([]);
+    });
+
+    it('rejects a kid with 403 before calling the database', async () => {
+        const kid: AuthUser = { ...parent, id: 'kid-a', role: 'kid' };
+        // Nothing queued: any database call would throw "no reply queued".
+        const { guild } = guildWith({});
+
+        await expect(guild.create(kid, dto)).rejects.toBeInstanceOf(
+            ForbiddenException,
+        );
+    });
+
+    it("returns 400 with the function's message when it refuses", async () => {
+        const { guild } = guildWith({
+            start_guild_quest: [
+                {
+                    error: {
+                        message: 'only a parent can start a guild quest',
+                        code: 'P0001',
+                    },
+                },
+            ],
+        });
+
+        const err: unknown = await guild
+            .create(parent, dto)
+            .catch((e: unknown) => e);
+
+        expect(err).toBeInstanceOf(BadRequestException);
+        expect((err as BadRequestException).message).toBe(
+            'only a parent can start a guild quest',
+        );
+    });
+
+    it('rejects as a server fault when the database call fails', async () => {
+        const { guild } = guildWith({ start_guild_quest: [dbDown] });
+
         await expectServerFault(guild.create(parent, dto));
-        expect(writes).not.toContainEqual({ table: 'quests', op: 'insert' });
     });
 });

@@ -8,6 +8,9 @@ import { AuthUser } from '../auth/auth-user.interface';
 import { DbResult } from '../db-types';
 import { CreateGuildDto } from './dto/create-guild.dto';
 
+/** SQLSTATE of a plpgsql `raise exception` with no explicit code. */
+const RAISED_BY_FUNCTION = 'P0001';
+
 export interface GuildQuest {
     id: string;
     title: string;
@@ -37,8 +40,9 @@ export interface GuildView {
  *
  * The per-kid contribution breakdown must be read across all kids' ledgers,
  * which a kid can't do under RLS — so we aggregate with the service role, scoped
- * to the caller's own household. Creating/closing goes through the parent's JWT
- * (RLS `quests_parent_all`).
+ * to the caller's own household. Creating goes through `start_guild_quest()`
+ * (migration 0023: archive + insert in one transaction); closing goes through
+ * the parent's JWT (RLS `quests_parent_all`).
  */
 @Injectable()
 export class GuildService {
@@ -123,41 +127,29 @@ export class GuildService {
         }
         const db = this.supabase.userClient(user.accessToken);
 
-        // Archive any existing active guild quest so only one runs at a time.
-        // Unchecked, a failed archive surfaced as a misleading 409 from the
-        // one-active-guild index on the insert below.
-        const { error: archiveErr } = (await db
-            .from('quests')
-            .update({ status: 'archived' })
-            .eq('household_id', user.householdId)
-            .eq('scope', 'guild')
-            .eq('status', 'active')) as DbResult<null>;
-        if (archiveErr) {
-            throw new Error(`guild archive: ${archiveErr.message}`);
-        }
-
-        const { data, error } = (await db
-            .from('quests')
-            .insert({
-                household_id: user.householdId,
-                scope: 'guild',
-                kid_id: null,
-                title: dto.title,
-                reward: dto.reward ?? null,
-                target_xp: dto.target_xp,
-                status: 'active',
-            })
-            .select('id, title, reward, target_xp, status, started_at')
-            .single()) as {
+        // One transaction: archives the active guild quest and inserts the new
+        // one, so a failed insert can't leave the household with none (0023).
+        const { data, error } = (await db.rpc('start_guild_quest', {
+            p_title: dto.title,
+            p_reward: dto.reward ?? null,
+            p_target_xp: dto.target_xp,
+        })) as {
             data: GuildQuest | null;
-            error: { message: string } | null;
+            error: { message: string; code?: string } | null;
         };
-        if (error || !data) {
-            throw new BadRequestException(
-                error?.message ?? 'Could not create the guild quest',
-            );
+        if (error) {
+            // P0001 = a `raise exception` in the function (its own refusal,
+            // safe to show). Anything else is a server fault → generic 500.
+            if (error.code === RAISED_BY_FUNCTION) {
+                throw new BadRequestException(error.message);
+            }
+            throw new Error(`guild start: ${error.message}`);
         }
-        return data;
+        if (!data) throw new Error('guild start: no row returned');
+
+        // The function returns the whole quests row; keep the response shape.
+        const { id, title, reward, target_xp, status, started_at } = data;
+        return { id, title, reward, target_xp, status, started_at };
     }
 
     /** Parent marks the guild quest granted (no ledger — the parent funds it). */

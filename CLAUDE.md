@@ -155,7 +155,8 @@ chore-app/
       `chores.est_minutes, category`.)
 - [x] **9. Guild quests + extras.** Guild quests: `backend/src/guild/` (`GET /guild`
       aggregates progress + per-kid contributions via service role — kids can't read
-      siblings' ledgers under RLS; `POST /guild`, `POST /guild/:id/complete`).
+      siblings' ledgers under RLS; `POST /guild` → `start_guild_quest()`, migration 0023, atomic archive + insert;
+      `POST /guild/:id/complete`).
       `/guild` page: family goal, hero progress, **color-coded contribution chart**
       + legend (dataviz palette). Pace calculator: `~/utils/pace.ts` on `/quests`
       (quests with a deadline show XP/week + green/yellow/red). Chore requests
