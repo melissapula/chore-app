@@ -27,8 +27,7 @@ jobs:
           cache: npm
           cache-dependency-path: backend/package-lock.json
       - run: npm ci
-      # Not `npm run lint`: that passes --fix, so CI would fix errors and still pass.
-      - run: npx eslint "{src,test}/**/*.ts"
+      - run: npm run lint
       - run: npm run build
       - run: npm test
 
