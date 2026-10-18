@@ -3,7 +3,7 @@ import { SupabaseService } from '../supabase/supabase.service';
 /** One scripted `{ data, error }` reply, as a PostgREST call would resolve. */
 export interface FakeReply {
     data?: unknown;
-    error?: { message: string } | null;
+    error?: { message: string; code?: string } | null;
 }
 
 /** A write the service attempted, in order — so specs can assert "never inserted". */
@@ -15,7 +15,8 @@ export interface FakeWrite {
 /**
  * A stand-in for SupabaseService at the database boundary (specs only).
  *
- * Each `from(table)` call takes the next scripted reply queued for that table;
+ * Each `from(table)` call takes the next scripted reply queued for that table,
+ * and each `rpc(fn)` call the next one queued under the function's name;
  * every chained builder method (`select`, `eq`, `maybeSingle`, …) returns the
  * builder, and awaiting it resolves the reply. Both `serviceClient()` and
  * `userClient()` hand back the same fake, since specs care about what the
@@ -63,6 +64,7 @@ export function fakeSupabase(replies: Record<string, FakeReply[]>) {
 
     const client = {
         from: (table: string) => builder(table),
+        rpc: (fn: string) => builder(fn),
         auth: {
             admin: {
                 updateUserById: jest.fn().mockResolvedValue({ error: null }),

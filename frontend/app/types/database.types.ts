@@ -774,6 +774,34 @@ export type Database = {
                 };
             };
             regenerate_join_code: { Args: never; Returns: string };
+            start_guild_quest: {
+                Args: {
+                    p_reward: string;
+                    p_target_xp: number;
+                    p_title: string;
+                };
+                Returns: {
+                    created_at: string;
+                    deadline: string | null;
+                    emoji: string | null;
+                    household_id: string;
+                    id: string;
+                    kid_id: string | null;
+                    redeemed_at: string | null;
+                    reward: string | null;
+                    scope: Database['chore']['Enums']['quest_scope'];
+                    started_at: string;
+                    status: Database['chore']['Enums']['quest_status'];
+                    target_xp: number;
+                    title: string;
+                };
+                SetofOptions: {
+                    from: '*';
+                    to: 'quests';
+                    isOneToOne: true;
+                    isSetofReturn: false;
+                };
+            };
             start_instance: {
                 Args: { p_instance_id: string };
                 Returns: {
