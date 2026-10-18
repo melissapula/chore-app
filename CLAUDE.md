@@ -270,6 +270,10 @@ The gate is computed **live** (no end-of-week cron yet): per kid, count their
   lint-staged inside `backend/` and `frontend/` separately (monorepo — each uses
   its own ESLint config + binaries). Staged code gets `eslint --fix` + `prettier
 --write`. Root-level docs aren't auto-formatted; run `npm run format` for that.
+- **Backend e2e uses the local Supabase stack (`supabase/config.toml`), never the
+  live project.** The harness (`backend/test/e2e-harness.ts`) refuses any
+  `SUPABASE_URL` that isn't `127.0.0.1`/`localhost`, because `ConfigModule` would
+  otherwise fill missing keys from `backend/.env`.
 
 ---
 
@@ -282,6 +286,11 @@ cd backend && npm run start:dev
 # Frontend
 cd frontend && npm run dev
 ```
+
+Backend e2e (needs Docker): `npx supabase@2 start` from the repo root, export the
+keys it prints as `SUPABASE_URL`, `SUPABASE_ANON_KEY` and
+`SUPABASE_SERVICE_ROLE_KEY`, then `cd backend && npm run test:e2e`. CI runs the
+same specs in the `backend-e2e` job.
 
 Environment: copy `backend/.env.example` → `backend/.env` and
 `frontend/.env.example` → `frontend/.env`, then fill in Supabase URL + keys.
