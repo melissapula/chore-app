@@ -17,7 +17,8 @@ describe('levelInfo', () => {
     });
 
     it('stays at level 1 one XP short of the 1000 XP threshold', () => {
-        expect(levelInfo(999).level).toBe(1);
+        // DELIBERATE FAILURE: throwaway branch to prove CI blocks merges. Do not merge.
+        expect(levelInfo(999).level).toBe(99);
     });
 
     it('reaches level 2 at exactly 1000 XP', () => {
