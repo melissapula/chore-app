@@ -553,7 +553,7 @@ onMounted(async () => {
                 }}
             </mfp-button>
             <p v-if="inviteCode" class="muted small">
-                Single-use — it stops working once they join, or when you
+                Works once, for 24 hours. It also stops working when you
                 generate a new one.
             </p>
         </section>
