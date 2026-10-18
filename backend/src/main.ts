@@ -1,10 +1,7 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { json } from 'express';
-import helmet from 'helmet';
 import { AppModule } from './app.module';
-import { DbErrorFilter } from './common/db-error.filter';
+import { configureApp } from './configure-app';
 import { toCorsOrigin } from './common/cors-origin';
 
 async function bootstrap() {
@@ -12,15 +9,7 @@ async function bootstrap() {
     const app = await NestFactory.create(AppModule, { bodyParser: false });
     const config = app.get(ConfigService);
 
-    app.use(helmet());
-    app.use(json({ limit: '2mb' }));
-
-    // whitelist strips unknown fields (blocks mass-assignment); transform coerces types.
-    app.useGlobalPipes(
-        new ValidationPipe({ whitelist: true, transform: true }),
-    );
-    // Sanitize leaked DB/RLS errors + remap their status codes (audit #2/#3).
-    app.useGlobalFilters(new DbErrorFilter());
+    configureApp(app);
 
     // Fail fast if the allowed origin is unset in production (audit L2) rather
     // than silently falling back to localhost with credentials enabled.

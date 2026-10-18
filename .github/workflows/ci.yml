@@ -1,6 +1,7 @@
 # Lint, type-check, test, and build both apps on every PR to main and every
-# push to main. No secrets: backend e2e is out (it boots AppModule, which needs
-# Supabase), and the frontend build only needs placeholder Supabase env.
+# push to main. No secrets: backend-e2e runs against a throwaway local Supabase
+# stack (supabase/config.toml), and the frontend build only needs placeholder
+# Supabase env.
 name: CI
 
 on:
@@ -30,6 +31,38 @@ jobs:
       - run: npm run lint
       - run: npm run build
       - run: npm test
+
+  backend-e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.121.0
+      # Reads supabase/config.toml and applies supabase/migrations to a fresh DB.
+      - run: supabase start
+      # The stack's well-known local demo keys, renamed to what the backend reads.
+      # Prints only the variable names, and fails unless all three were found.
+      - name: Export local Supabase keys
+        run: |
+          supabase status -o env \
+            --override-name api.url=SUPABASE_URL,auth.anon_key=SUPABASE_ANON_KEY,auth.service_role_key=SUPABASE_SERVICE_ROLE_KEY \
+            | grep -E '^SUPABASE_(URL|ANON_KEY|SERVICE_ROLE_KEY)=' \
+            | sed -E 's/^([A-Z_]+)="(.*)"$/\1=\2/' > "$RUNNER_TEMP/supabase.env"
+          cut -d= -f1 "$RUNNER_TEMP/supabase.env"
+          test "$(wc -l < "$RUNNER_TEMP/supabase.env")" -eq 3
+          cat "$RUNNER_TEMP/supabase.env" >> "$GITHUB_ENV"
+      - run: npm ci
+        working-directory: backend
+      - run: npm run test:e2e
+        working-directory: backend
+      - if: always()
+        run: supabase stop
 
   frontend:
     runs-on: ubuntu-latest
