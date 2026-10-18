@@ -74,7 +74,7 @@ async function onBootstrap() {
             household_name: formHousehold.value.trim(),
             display_name: formDisplayName.value.trim(),
             avatar_emoji:
-                avatar.value?.kind === 'emoji' ? avatar.value.emoji : null,
+                avatar.value?.kind === 'emoji' ? avatar.value.emoji : undefined,
         });
     if (err) {
         submitting.value = false;
@@ -110,7 +110,7 @@ async function onJoin() {
             invite_code: joinCode.value.trim(),
             display_name: formDisplayName.value.trim(),
             avatar_emoji:
-                avatar.value?.kind === 'emoji' ? avatar.value.emoji : null,
+                avatar.value?.kind === 'emoji' ? avatar.value.emoji : undefined,
         });
     if (err) {
         submitting.value = false;

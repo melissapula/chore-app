@@ -258,6 +258,12 @@ The gate is computed **live** (no end-of-week cron yet): per kid, count their
   rule in `theme-playful.css` (it only sets min-size/display/alignment, so it
   layers on scoped styles without `!important` — keep control class names in sync
   there). Mobile/PWA `<meta>` (theme-color, apple-*) lives in `nuxt.config` `app.head`.
+- **Regenerate the frontend DB types after every migration.** `npm run typecheck`
+  (vue-tsc) checks Supabase queries against `frontend/app/types/database.types.ts`,
+  the path `@nuxtjs/supabase` reads. Without that file the client is typed
+  `Database = unknown` and every table becomes `never`. After applying a migration, run
+  `npx supabase@2 gen types typescript --project-id wolvaszkxkuapcjypthq --schema chore > frontend/app/types/database.types.ts`
+  (needs `npx supabase@2 login` once, in a real terminal) and commit it with the migration.
 - **Pre-commit hook (husky + lint-staged).** On commit, `.husky/pre-commit` runs
   lint-staged inside `backend/` and `frontend/` separately (monorepo — each uses
   its own ESLint config + binaries). Staged code gets `eslint --fix` + `prettier
