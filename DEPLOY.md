@@ -103,6 +103,10 @@ becomes your `API_BASE` in Part B.
      `NODE_ENV=production` would otherwise make npm skip it and the build fails).
    - **Start Command:** `npm run start:prod`
    - **Instance Type:** **Free**.
+
+   > Node version comes from the repo (`.nvmrc` → Node 24). Leave Render's
+   > `NODE_VERSION` env var unset, or it overrides the repo.
+
 4. Add the env vars from the table above (**Environment** section).
 5. Create the service. Render gives you a URL like
    `https://chorequest-backend.onrender.com`. **This is your `API_BASE`.**
@@ -122,6 +126,10 @@ becomes your `API_BASE` in Part B.
    - **Branch:** the branch you chose above.
    - Build/Start are already handled by `backend/railway.json`
      (`npm run build` then `npm run start:prod`). You don't need to type commands.
+
+   > Node version comes from `engines.node` in `backend/package.json` (Node 24),
+   > which Nixpacks reads.
+
 4. **Variables** tab → add the env vars from the table above.
 5. **Settings → Networking → Generate Domain.** Copy the URL —
    e.g. `https://chorequest-backend-production.up.railway.app`.
@@ -138,6 +146,10 @@ becomes your `API_BASE` in Part B.
    - **Framework Preset:** Nuxt (Vercel auto-detects it; leave the default build
      command `nuxt build`).
    - **Branch:** the same branch you chose.
+
+   > Node version comes from `engines.node` in `frontend/package.json` (Node 24),
+   > which overrides the dashboard's **Node.js Version** setting.
+
 4. Expand **Environment Variables** and add:
 
    | Variable       | Value                                             |
