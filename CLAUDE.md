@@ -149,8 +149,9 @@ chore-app/
       `ledger_entries.quest_id`, `redeem_quest()` RPC). Kid `/quests` page (level
       bar, spendable XP, create + track quests); parent redeems ready quests on
       `/family`. Level derived client-side (`~/utils/level.ts`). Weekly bundle
-      engine (`~/utils/bundles.ts`): kid enters a target XP on `/board` → 3
-      bundles (fewest / fastest / balanced) over the currently-OPEN pool;
+      engine (`~/utils/bundles.ts`): kid enters a target XP on the `/dashboard`
+      Side Quest tab (`components/KidDashboard.vue`) → up to 3 distinct bundles
+      (fewest / fastest / balanced) over the currently-OPEN pool;
       "Claim these" runs the normal claim flow. (Instance list now joins
       `chores.est_minutes, category`.)
 - [x] **9. Guild quests + extras.** Guild quests: `backend/src/guild/` (`GET /guild`

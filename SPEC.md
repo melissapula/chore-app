@@ -315,7 +315,7 @@ On **approve**, the parent is dropped into the normal create-chore form pre-fill
 ### Weekly bundle engine (subset-sum, family scale)
 
 Input: target $, and currently `OPEN` + eligible + recurring-available chores.
-Output: 3 labeled bundles that hit/exceed target, differentiated by:
+Output: up to 3 labeled bundles that hit/exceed target, one per strategy below. Strategies often converge on a small pool, so an identical plan is shown once (a pool smaller than the target collapses to a single all-of-it bundle), and an empty pool shows none:
 
 - **Fewest chores** — biggest values first.
 - **Fastest** — lowest total `est_minutes`.
