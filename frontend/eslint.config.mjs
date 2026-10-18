@@ -8,6 +8,8 @@ export default withNuxt(
     {
         rules: {
             'vue/no-undef-components': 'off',
+            // Prettier always self-closes void elements (<img />, <input />); follow it.
+            'vue/html-self-closing': ['warn', { html: { void: 'always' } }],
         },
     },
 );
