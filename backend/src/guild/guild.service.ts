@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { SupabaseService } from '../supabase/supabase.service';
 import { AuthUser } from '../auth/auth-user.interface';
+import { DbResult } from '../db-types';
 import { CreateGuildDto } from './dto/create-guild.dto';
 
 export interface GuildQuest {
@@ -47,22 +48,28 @@ export class GuildService {
     async current(user: AuthUser): Promise<GuildView> {
         const svc = this.supabase.serviceClient();
 
-        const { data: quest } = (await svc
+        const { data: quest, error: questErr } = (await svc
             .from('quests')
             .select('id, title, reward, target_xp, status, started_at')
             .eq('household_id', user.householdId)
             .eq('scope', 'guild')
             .eq('status', 'active')
-            .maybeSingle()) as { data: GuildQuest | null };
+            .maybeSingle()) as DbResult<GuildQuest>;
+        // A failed read must not pass for "no quest" / "0 XP" — throw a plain
+        // Error so DbErrorFilter logs it and answers a generic 500.
+        if (questErr) throw new Error(`guild quest read: ${questErr.message}`);
 
         // Kids in join order → stable chart-color assignment on the frontend.
-        const { data: kidsData } = await svc
+        const { data: kidsData, error: kidsErr } = (await svc
             .from('users')
             .select('id, display_name')
             .eq('household_id', user.householdId)
             .eq('role', 'kid')
-            .order('created_at', { ascending: true });
-        const kids = (kidsData ?? []) as { id: string; display_name: string }[];
+            .order('created_at', { ascending: true })) as DbResult<
+            { id: string; display_name: string }[]
+        >;
+        if (kidsErr) throw new Error(`guild kids read: ${kidsErr.message}`);
+        const kids = kidsData ?? [];
 
         if (!quest) {
             return {
@@ -77,16 +84,16 @@ export class GuildService {
         }
 
         // Positive XP earned across the household since the quest started.
-        const { data: ledData } = await svc
+        const { data: ledData, error: ledErr } = (await svc
             .from('ledger_entries')
             .select('kid_id, delta_cents')
             .eq('household_id', user.householdId)
             .gt('delta_cents', 0)
-            .gte('created_at', quest.started_at);
-        const ledger = (ledData ?? []) as {
-            kid_id: string;
-            delta_cents: number;
-        }[];
+            .gte('created_at', quest.started_at)) as DbResult<
+            { kid_id: string; delta_cents: number }[]
+        >;
+        if (ledErr) throw new Error(`guild ledger read: ${ledErr.message}`);
+        const ledger = ledData ?? [];
 
         const byKid: Record<string, number> = {};
         for (const l of ledger) {
@@ -117,12 +124,17 @@ export class GuildService {
         const db = this.supabase.userClient(user.accessToken);
 
         // Archive any existing active guild quest so only one runs at a time.
-        await db
+        // Unchecked, a failed archive surfaced as a misleading 409 from the
+        // one-active-guild index on the insert below.
+        const { error: archiveErr } = (await db
             .from('quests')
             .update({ status: 'archived' })
             .eq('household_id', user.householdId)
             .eq('scope', 'guild')
-            .eq('status', 'active');
+            .eq('status', 'active')) as DbResult<null>;
+        if (archiveErr) {
+            throw new Error(`guild archive: ${archiveErr.message}`);
+        }
 
         const { data, error } = (await db
             .from('quests')
