@@ -274,6 +274,10 @@ The gate is computed **live** (no end-of-week cron yet): per kid, count their
   live project.** The harness (`backend/test/e2e-harness.ts`) refuses any
   `SUPABASE_URL` that isn't `127.0.0.1`/`localhost`, because `ConfigModule` would
   otherwise fill missing keys from `backend/.env`.
+- **A migration that touches RLS or an RPC ships with pgTAP coverage** in
+  `supabase/tests/`, same local stack. `001-rls-enabled.test.sql` pins every
+  table's exact policy set, so adding or dropping a policy fails it until the
+  test is updated — that is intended.
 - **Node 24 is pinned** in the root `.nvmrc` (CI + Render) and `engines.node: "24.x"`
   in all three `package.json` files (Vercel, Railway). Bump them together.
 
@@ -293,6 +297,11 @@ Backend e2e (needs Docker): `npx supabase@2 start` from the repo root, export th
 keys it prints as `SUPABASE_URL`, `SUPABASE_ANON_KEY` and
 `SUPABASE_SERVICE_ROLE_KEY`, then `cd backend && npm run test:e2e`. CI runs the
 same specs in the `backend-e2e` job.
+
+SQL/RLS tests (needs Docker): `npx supabase@2 db start` from the repo root, then
+`npx supabase@2 test db`. Each file in `supabase/tests/` pulls in the shared
+helpers (`helpers/setup.psql`) and rolls back. CI runs the same in the
+`db-tests` job.
 
 Environment: copy `backend/.env.example` → `backend/.env` and
 `frontend/.env.example` → `frontend/.env`, then fill in Supabase URL + keys.
