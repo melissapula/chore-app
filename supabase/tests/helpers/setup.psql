@@ -1,0 +1,161 @@
+-- ============================================================================
+-- Shared pgTAP helpers. Every test file includes this right after `begin;`:
+--
+--   begin;
+--   \ir helpers/setup.psql
+--   select plan(n);
+--   select tests.seed();
+--
+-- Local stack only (supabase/config.toml), never the live project.
+--
+-- Everything here is created inside the including file's transaction and rolled
+-- back with it, so each file starts from the migrations alone: no file depends
+-- on another having run first, and nothing is left in the database. The `.psql`
+-- extension keeps pg_prove from running this file as a test of its own.
+-- ============================================================================
+
+-- `supabase test db` enables pgTAP itself; this keeps a file run by hand working.
+create extension if not exists pgtap with schema extensions;
+
+create schema if not exists tests;
+grant usage on schema tests to authenticated, anon;
+
+-- A fixed, readable UUID for a fixture name: tests.id_of('kid_a1').
+create or replace function tests.id_of(p_name text)
+returns uuid language sql immutable set search_path = '' as $$
+  select md5(p_name)::uuid
+$$;
+
+create or replace function tests.make_household(p_id uuid, p_name text)
+returns uuid language sql security definer set search_path = '' as $$
+  insert into chore.households (id, name) values (p_id, p_name) returning id
+$$;
+
+-- An Auth user plus its chore.users row, the shape the onboarding RPCs and the
+-- service-role kid path produce.
+create or replace function tests.make_user(
+  p_id        uuid,
+  p_household uuid,
+  p_role      chore.user_role,
+  p_name      text default null
+) returns void language plpgsql security definer set search_path = '' as $$
+begin
+  insert into auth.users (id, email, aud, role)
+  values (p_id, p_id::text || '@pgtap.local', 'authenticated', 'authenticated');
+
+  insert into chore.users (id, household_id, display_name, role)
+  values (p_id, p_household, coalesce(p_name, p_role::text), p_role);
+end;
+$$;
+
+-- Become a signed-in user for the rest of the transaction: the `authenticated`
+-- role plus the JWT claims auth.uid() reads. Sets both the current claims object
+-- and the legacy `claim.sub` setting, so either auth.uid() version works.
+-- Not SECURITY DEFINER: Postgres refuses to change `role` inside one.
+create or replace function tests.act_as(p_user uuid)
+returns void language plpgsql as $$
+begin
+  perform pg_catalog.set_config('role', 'authenticated', true);
+  perform pg_catalog.set_config(
+    'request.jwt.claims',
+    pg_catalog.json_build_object('sub', p_user, 'role', 'authenticated')::text,
+    true
+  );
+  perform pg_catalog.set_config('request.jwt.claim.sub', p_user::text, true);
+end;
+$$;
+
+-- Become a signed-out API caller: `anon`, no subject, so auth.uid() is null.
+create or replace function tests.act_as_anon()
+returns void language plpgsql as $$
+begin
+  perform pg_catalog.set_config('role', 'anon', true);
+  perform pg_catalog.set_config('request.jwt.claims', '{"role":"anon"}', true);
+  perform pg_catalog.set_config('request.jwt.claim.sub', '', true);
+end;
+$$;
+
+-- Back to the session user (postgres), which owns the tables and so bypasses RLS.
+-- Used to check that a denied write really left the row alone.
+create or replace function tests.reset_actor()
+returns void language plpgsql as $$
+begin
+  perform pg_catalog.set_config('role', 'none', true);
+  perform pg_catalog.set_config('request.jwt.claims', '{}', true);
+  perform pg_catalog.set_config('request.jwt.claim.sub', '', true);
+end;
+$$;
+
+-- Runs one UPDATE/DELETE as the current actor and returns how many rows it
+-- touched. RLS hides rows a USING clause rejects instead of raising, so a denied
+-- update shows up as 0 here. Pair every 0 with a check, as postgres, that the
+-- row is unchanged.
+create or replace function tests.affected_rows(p_sql text)
+returns int language plpgsql as $$
+declare
+  n int;
+begin
+  execute p_sql;
+  get diagnostics n = row_count;
+  return n;
+end;
+$$;
+
+-- Two households, A and B, each with one parent, two kids (kid 2 is the sibling
+-- who must not see kid 1's private rows), and one row in every chore table.
+-- Run as postgres, before switching actor.
+create or replace function tests.seed()
+returns void language plpgsql as $$
+declare
+  h      text;
+  house  uuid;
+  parent uuid;
+  kid1   uuid;
+  kid2   uuid;
+begin
+  foreach h in array array['a', 'b'] loop
+    house  := tests.id_of('house_' || h);
+    parent := tests.id_of('parent_' || h);
+    kid1   := tests.id_of('kid_' || h || '1');
+    kid2   := tests.id_of('kid_' || h || '2');
+
+    perform tests.make_household(house, 'House ' || upper(h));
+    perform tests.make_user(parent, house, 'parent', 'Parent ' || upper(h));
+    perform tests.make_user(kid1, house, 'kid', 'Kid ' || upper(h) || '1');
+    perform tests.make_user(kid2, house, 'kid', 'Kid ' || upper(h) || '2');
+
+    insert into chore.chores (id, household_id, title, chore_type, value_cents)
+    values (tests.id_of('chore_' || h), house, 'Rake leaves', 'paid', 150);
+
+    insert into chore.chore_instances
+      (id, household_id, chore_id, state, value_cents_snapshot)
+    values
+      (tests.id_of('inst_' || h), house, tests.id_of('chore_' || h), 'OPEN', 150);
+
+    insert into chore.ledger_entries (household_id, kid_id, delta_cents, reason)
+    values (house, kid1, 100, 'parent_adjustment'),
+           (house, kid2, 200, 'parent_adjustment');
+
+    insert into chore.weekly_gates (household_id, kid_id, week_start)
+    values (house, kid1, '2026-10-12'),
+           (house, kid2, '2026-10-12');
+
+    insert into chore.notes
+      (household_id, chore_instance_id, author_id, recipient_id, body)
+    values (house, tests.id_of('inst_' || h), parent, kid1, 'Nice raking');
+
+    insert into chore.push_subscriptions
+      (user_id, household_id, endpoint, p256dh, auth)
+    values
+      (kid1, house, 'https://fcm.googleapis.com/fcm/send/kid_' || h || '1', 'key', 'secret');
+
+    insert into chore.quests (id, household_id, scope, kid_id, title, target_xp)
+    values (tests.id_of('quest_' || h || '1'), house, 'personal', kid1, 'New bike', 5000),
+           (tests.id_of('quest_' || h || '2'), house, 'personal', kid2, 'Video game', 3000),
+           (tests.id_of('guild_' || h), house, 'guild', null, 'Pizza night', 10000);
+
+    insert into chore.chore_requests (household_id, requested_by, title)
+    values (house, kid1, 'Wash the car');
+  end loop;
+end;
+$$;

@@ -1,7 +1,7 @@
 # Lint, type-check, test, and build both apps on every PR to main and every
-# push to main. No secrets: backend-e2e runs against a throwaway local Supabase
-# stack (supabase/config.toml), and the frontend build only needs placeholder
-# Supabase env.
+# push to main. No secrets: backend-e2e and db-tests run against a throwaway
+# local Supabase stack (supabase/config.toml), and the frontend build only needs
+# placeholder Supabase env.
 name: CI
 
 on:
@@ -61,6 +61,21 @@ jobs:
         working-directory: backend
       - run: npm run test:e2e
         working-directory: backend
+      - if: always()
+        run: supabase stop
+
+  db-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.121.0
+      # Postgres only, with supabase/migrations applied. Local stack, never the
+      # live project: no --db-url or --linked.
+      - run: supabase db start
+      # pgTAP files in supabase/tests (see CLAUDE.md, How to run).
+      - run: supabase test db
       - if: always()
         run: supabase stop
 
