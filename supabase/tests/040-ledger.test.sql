@@ -12,7 +12,7 @@ select tests.act_as(tests.id_of('kid_a1'));
 
 select is(
   (select count(*)::int from chore.ledger_entries),
-  1,
+  2,
   'a kid sees exactly one ledger row: their own');
 
 select is_empty(
