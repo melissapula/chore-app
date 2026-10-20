@@ -152,11 +152,12 @@ becomes your `API_BASE` in Part B.
 
 4. Expand **Environment Variables** and add:
 
-   | Variable       | Value                                             |
-   | -------------- | ------------------------------------------------- |
-   | `SUPABASE_URL` | your Frula project URL                            |
-   | `SUPABASE_KEY` | your anon key (same value as the backend's ANON)  |
-   | `API_BASE`     | your backend URL from Part A (Render or Railway)   |
+   | Variable                         | Value                                                        |
+   | -------------------------------- | ------------------------------------------------------------ |
+   | `SUPABASE_URL`                   | your Frula project URL                                       |
+   | `SUPABASE_KEY`                   | your anon key (same value as the backend's ANON)             |
+   | `API_BASE`                       | your backend URL from Part A (Render or Railway)             |
+   | `NUXT_PUBLIC_TURNSTILE_SITE_KEY` | optional: Turnstile site key (see "Turn on sign-in CAPTCHA") |
 
    > `API_BASE` is baked into the app at build time, so it must be set **before**
    > this first deploy. If you change it later, redeploy the frontend.
@@ -196,6 +197,40 @@ The frontend is an installable PWA served over HTTPS, so no app store needed:
 It then launches full-screen like a native app. To turn on push notifications,
 each person taps **Enable notifications** on their dashboard (requires the VAPID
 keys to be set on the backend host).
+
+---
+
+## Turn on sign-in CAPTCHA (optional)
+
+Supabase Auth can require a Cloudflare Turnstile check on every browser sign-up
+and sign-in. The app already sends the token once a site key is set. **Order
+matters:** prove tokens are being sent before Supabase starts requiring them, or
+nobody in the family can log in. Stop at the first step that fails.
+
+1. **Cloudflare → Turnstile → Add site.** Widget mode **Managed**; hostnames:
+   your Vercel host (e.g. `chorequest.vercel.app`) and `localhost`. Copy the
+   **site key** and the **secret**.
+2. **Vercel → frontend project → Environment Variables:** set
+   `NUXT_PUBLIC_TURNSTILE_SITE_KEY` to the site key, then redeploy.
+3. **Prove it before enforcing.** On the live site, on a phone: the widget shows
+   under the login form, and a parent log in and a kid log in both still work.
+   In desktop dev tools, the Auth `token?grant_type=password` request body
+   carries `gotrue_meta_security.captcha_token`.
+4. **Supabase → Frula project → Authentication → Attack Protection:** enable
+   CAPTCHA, provider **Turnstile**, paste the **secret**. This is project wide
+   (Frula's Auth too).
+5. **Smoke test right away, on a phone:** parent log in, kid log in, and a
+   throwaway parent sign-up (delete that user afterwards). Then confirm adding a
+   kid on `/family` still works (that uses the admin API, which CAPTCHA doesn't
+   cover).
+
+**Rollback:** Supabase → Attack Protection → turn CAPTCHA off. It takes effect at
+once with no deploy, and the widget can stay (Supabase ignores the token while
+CAPTCHA is off).
+
+> The local stack (`supabase/config.toml`) keeps `[auth.captcha]` off so backend
+> e2e sign-ins work without a token. When the app is wrapped with Capacitor, it's
+> served from a different origin, so that hostname must be added in step 1.
 
 ---
 

@@ -10,12 +10,23 @@
 //
 // <mfp-input> values are read from the host's `value` via @input (works for both
 // the component's custom event and the native composed one).
+//
+// CAPTCHA: when a Turnstile site key is configured, one widget below the forms
+// supplies a single-use token that every Auth call passes to Supabase, which
+// verifies it. No site key (local dev, previews) → no widget, no token sent.
 const supabase = useSupabaseClient();
 
 const mode = ref<'parent' | 'kid'>('parent');
 const error = ref<string | null>(null);
 const notice = ref<string | null>(null);
 const busy = ref(false);
+
+// --- CAPTCHA (Cloudflare Turnstile) ---
+const siteKey = useRuntimeConfig().public.turnstile?.siteKey;
+const captchaToken = ref<string>();
+const turnstile = ref<{ reset: () => void }>();
+const CAPTCHA_MESSAGE =
+    "Hmm, we couldn't check you're not a robot. Wait a moment and try again.";
 
 // --- parent (email + password) ---
 const authMode = ref<'login' | 'signup'>('login');
@@ -35,10 +46,14 @@ async function parentLogin() {
     const { error: err } = await supabase.auth.signInWithPassword({
         email: address,
         password: password.value,
+        options: captchaOptions(captchaToken.value),
     });
     busy.value = false;
+    resetCaptcha();
     if (err) {
-        error.value = 'That email or password isn’t right.';
+        error.value = isCaptchaError(err)
+            ? CAPTCHA_MESSAGE
+            : 'That email or password isn’t right.';
         return;
     }
     navigateTo('/dashboard');
@@ -64,10 +79,12 @@ async function parentSignup() {
     const { data, error: err } = await supabase.auth.signUp({
         email: address,
         password: password.value,
+        options: captchaOptions(captchaToken.value),
     });
     busy.value = false;
+    resetCaptcha();
     if (err) {
-        error.value = err.message;
+        error.value = isCaptchaError(err) ? CAPTCHA_MESSAGE : err.message;
         return;
     }
     if (data.session) {
@@ -102,13 +119,23 @@ async function kidLogin() {
     const { error: err } = await supabase.auth.signInWithPassword({
         email: `${username}@${KID_EMAIL_DOMAIN}`,
         password: `choreq_${pin}`,
+        options: captchaOptions(captchaToken.value),
     });
     busy.value = false;
+    resetCaptcha();
     if (err) {
-        error.value = 'That username or PIN isn’t right. Try again!';
+        error.value = isCaptchaError(err)
+            ? CAPTCHA_MESSAGE
+            : 'That username or PIN isn’t right. Try again!';
         return;
     }
     navigateTo('/dashboard');
+}
+
+// Turnstile tokens are single use: get a fresh one after every attempt.
+function resetCaptcha() {
+    captchaToken.value = undefined;
+    turnstile.value?.reset();
 }
 
 function switchMode(m: 'parent' | 'kid') {
@@ -275,6 +302,13 @@ function switchAuth(m: 'login' | 'signup') {
             </form>
         </template>
 
+        <NuxtTurnstile
+            v-if="siteKey"
+            ref="turnstile"
+            v-model="captchaToken"
+            class="captcha"
+        />
+
         <p class="back"><NuxtLink to="/">← Back</NuxtLink></p>
     </main>
 </template>
@@ -336,6 +370,10 @@ form {
     color: var(--color-brand-primary, #6c4ce0);
     cursor: pointer;
     text-decoration: underline;
+}
+.captcha {
+    margin-top: 1.25rem;
+    max-width: 100%;
 }
 .back {
     margin-top: 1.5rem;

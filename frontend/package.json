@@ -29,7 +29,9 @@
     "dependencies": {
         "@mfp-design-system/all": "^5.0.0",
         "@mfp-design-system/tokens": "^0.9.0",
+        "@nuxt/scripts": "1.3.12",
         "@nuxtjs/supabase": "^2.0.9",
+        "@nuxtjs/turnstile": "1.1.3",
         "@vite-pwa/nuxt": "^1.1.1",
         "nostics": "^1.3.0",
         "nuxt": "^4.4.8",
