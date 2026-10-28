@@ -238,6 +238,9 @@ function apiMessage(e: unknown): string {
     return err?.data?.message || err?.message || 'Something went wrong';
 }
 
+// `silent` refreshes in place. Only the first load shows the page-level
+// "Loading…"; after an action the lists stay mounted (scroll, open edit panels
+// and note threads survive) and the button's own busy state is the feedback.
 async function loadAll(silent = false) {
     if (!silent) loading.value = true;
     error.value = null;
@@ -332,7 +335,7 @@ async function createChore() {
         isRisky.value = false;
         riskyPrompt.value = null;
         riskyConfirmed.value = false;
-        await loadAll();
+        await loadAll(true);
     } catch (e) {
         const msg = apiMessage(e);
         // Part of a batch may have landed; show it (loadAll clears the error).
@@ -442,7 +445,7 @@ async function saveEdit() {
         editId.value = null;
         editRiskyPrompt.value = null;
         editRiskyConfirmed.value = false;
-        await loadAll();
+        await loadAll(true);
     } catch (e) {
         error.value = apiMessage(e);
     }
@@ -461,7 +464,7 @@ async function setArchived(id: string, archived: boolean) {
         });
         archivingId.value = null;
         if (editId.value === id) editId.value = null;
-        await loadAll();
+        await loadAll(true);
     } catch (e) {
         error.value = apiMessage(e);
     }
@@ -474,7 +477,7 @@ async function addToPool(id: string) {
     busyId.value = id;
     try {
         await authFetch(`/chores/${id}/instances`, { method: 'POST' });
-        await loadAll();
+        await loadAll(true);
     } catch (e) {
         error.value = apiMessage(e);
     }
@@ -490,7 +493,7 @@ async function act(id: string, action: 'approve' | 'confirm' | 'release') {
     busyId.value = id;
     try {
         await authFetch(`/chore-instances/${id}/${action}`, { method: 'POST' });
-        await loadAll();
+        await loadAll(true);
     } catch (e) {
         error.value = apiMessage(e);
     }
@@ -504,7 +507,7 @@ async function removeInstance(id: string) {
     try {
         await authFetch(`/chore-instances/${id}`, { method: 'DELETE' });
         removingId.value = null;
-        await loadAll();
+        await loadAll(true);
     } catch (e) {
         error.value = apiMessage(e);
     }
