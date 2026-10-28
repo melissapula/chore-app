@@ -4,6 +4,7 @@
 //   • Required (SPEC §3a) — assigned to one kid, has a due date, no race/timer;
 //     kid marks done → parent confirms. Can gate the week's pay.
 import type { RealtimeChannel } from '@supabase/supabase-js';
+import type { ChorePreset } from '~/components/ChorePicker.vue';
 
 const { authFetch } = useApi();
 const supabase = useSupabaseClient();
@@ -44,6 +45,14 @@ interface Kid {
     birthdate: string | null;
 }
 
+// A preset ticked in the multi-select picker, with its own editable icon + XP.
+interface PickedChore {
+    title: string; // plain, canonical name
+    questTitle: string; // gamified name kids see (also the picker's key)
+    emoji: string;
+    xp: number | null;
+}
+
 // SPEC §3b: the risky-chore warning only fires for kids under this age.
 const RISKY_AGE = 12;
 
@@ -73,6 +82,14 @@ const questTitle = ref(''); // §4 gamified name kids see (optional)
 const emoji = ref('');
 const xp = ref<number | null>(null);
 const isCustom = ref(false); // paid: chose "Create a custom chore" → editable name
+const picked = ref<PickedChore[]>([]); // paid: presets ticked in the picker
+const pickedKeys = computed(() => picked.value.map((p) => p.questTitle));
+const hasPaidDraft = computed(() => isCustom.value || picked.value.length > 0);
+const canSubmit = computed(() =>
+    choreType.value === 'paid' && !isCustom.value
+        ? picked.value.length > 0
+        : !!title.value,
+);
 const assignedKid = ref('');
 const dueType = ref<'end_of_day' | 'end_of_week'>('end_of_day');
 const gatesPay = ref(false);
@@ -142,27 +159,47 @@ function youngAffected(
     return kids.value.filter((k) => ids.includes(k.id) && isYoung(k));
 }
 
-// Fill the paid form from a picked preset (gamified chore, or a custom one).
-// SPEC §4: store the PLAIN name as title (canonical/search) and the gamified
-// name as quest_title (what kids see). For a custom chore the parent types one
-// name (title); they can add a fun name separately.
-function onPreset(p: {
-    title: string; // gamified (preset) or the typed name (custom)
-    plain: string; // plain/canonical
-    emoji: string;
-    xp: number;
-    custom?: boolean;
-}) {
-    if (p.custom) {
-        title.value = p.title;
-        questTitle.value = '';
-    } else {
-        title.value = p.plain;
-        questTitle.value = p.title;
+// Tick/untick a preset in the multi-select picker. SPEC §4: each becomes its own
+// template with the PLAIN name as title (canonical/search) and the gamified
+// name as quest_title (what kids see). Ticking a preset leaves custom mode.
+function onTogglePreset(p: ChorePreset) {
+    if (pickedKeys.value.includes(p.title)) {
+        picked.value = picked.value.filter((c) => c.questTitle !== p.title);
+        return;
     }
-    emoji.value = p.emoji || '';
-    xp.value = p.xp || null;
-    isCustom.value = !!p.custom;
+    if (isCustom.value) {
+        isCustom.value = false;
+        title.value = '';
+        questTitle.value = '';
+        emoji.value = '';
+        xp.value = null;
+    }
+    picked.value = [
+        ...picked.value,
+        {
+            title: p.plain,
+            questTitle: p.title,
+            emoji: p.emoji,
+            xp: p.xp || null,
+        },
+    ];
+}
+
+function updatePicked(key: string, patch: Partial<PickedChore>) {
+    picked.value = picked.value.map((c) =>
+        c.questTitle === key ? { ...c, ...patch } : c,
+    );
+}
+
+// "Create a custom chore": one chore the parent names themselves (+ an optional
+// fun name), added on its own — so it replaces any ticked presets.
+function onCustom(name: string) {
+    picked.value = [];
+    title.value = name;
+    questTitle.value = '';
+    emoji.value = '';
+    xp.value = null;
+    isCustom.value = true;
 }
 
 const onTabKeys = useTabKeys(['paid', 'required'] as const, choreType, (t) =>
@@ -177,6 +214,7 @@ function switchType(t: 'paid' | 'required') {
     emoji.value = '';
     xp.value = null;
     isCustom.value = false;
+    picked.value = [];
     eligible.value = [];
     isRisky.value = false;
     riskyPrompt.value = null;
@@ -229,9 +267,36 @@ function confirmRisky() {
     void createChore();
 }
 
+// Paid presets: one POST per ticked chore, in order. Each is dropped from the
+// list as it lands, so if one fails the rest stay put to retry.
+async function createPicked() {
+    for (const c of [...picked.value]) {
+        await authFetch<Chore>('/chores', {
+            method: 'POST',
+            body: {
+                title: c.title,
+                quest_title: c.questTitle || undefined,
+                chore_type: 'paid' as const,
+                icon_emoji: c.emoji.trim() || undefined,
+                value_cents: c.xp && c.xp > 0 ? Math.round(c.xp) : 0,
+                is_risky: isRisky.value,
+                eligible_kid_ids: effectiveEligible(eligible.value),
+            },
+        });
+        picked.value = picked.value.filter(
+            (p) => p.questTitle !== c.questTitle,
+        );
+    }
+}
+
 async function createChore() {
     error.value = null;
-    if (!title.value.trim()) {
+    const isBatch = choreType.value === 'paid' && !isCustom.value;
+    if (isBatch && !picked.value.length) {
+        error.value = 'Pick at least one chore.';
+        return;
+    }
+    if (!isBatch && !title.value.trim()) {
         error.value = 'Give your chore a name.';
         return;
     }
@@ -252,29 +317,11 @@ async function createChore() {
     }
     creating.value = true;
     try {
-        const body =
-            choreType.value === 'paid'
-                ? {
-                      title: title.value.trim(),
-                      quest_title: questTitle.value.trim() || undefined,
-                      chore_type: 'paid' as const,
-                      icon_emoji: emoji.value.trim() || undefined,
-                      value_cents:
-                          xp.value && xp.value > 0 ? Math.round(xp.value) : 0,
-                      is_risky: isRisky.value,
-                      eligible_kid_ids: effectiveEligible(eligible.value),
-                  }
-                : {
-                      title: title.value.trim(),
-                      quest_title: questTitle.value.trim() || undefined,
-                      chore_type: 'required' as const,
-                      icon_emoji: emoji.value.trim() || undefined,
-                      assigned_kid_id: assignedKid.value,
-                      due_type: dueType.value,
-                      gates_pay: gatesPay.value,
-                      is_risky: isRisky.value,
-                  };
-        await authFetch<Chore>('/chores', { method: 'POST', body });
+        if (isBatch) {
+            await createPicked();
+        } else {
+            await createSingle();
+        }
         title.value = '';
         questTitle.value = '';
         emoji.value = '';
@@ -287,9 +334,38 @@ async function createChore() {
         riskyConfirmed.value = false;
         await loadAll();
     } catch (e) {
-        error.value = apiMessage(e);
+        const msg = apiMessage(e);
+        // Part of a batch may have landed; show it (loadAll clears the error).
+        if (isBatch) await loadAll(true);
+        error.value = msg;
     }
     creating.value = false;
+}
+
+async function createSingle() {
+    const body =
+        choreType.value === 'paid'
+            ? {
+                  title: title.value.trim(),
+                  quest_title: questTitle.value.trim() || undefined,
+                  chore_type: 'paid' as const,
+                  icon_emoji: emoji.value.trim() || undefined,
+                  value_cents:
+                      xp.value && xp.value > 0 ? Math.round(xp.value) : 0,
+                  is_risky: isRisky.value,
+                  eligible_kid_ids: effectiveEligible(eligible.value),
+              }
+            : {
+                  title: title.value.trim(),
+                  quest_title: questTitle.value.trim() || undefined,
+                  chore_type: 'required' as const,
+                  icon_emoji: emoji.value.trim() || undefined,
+                  assigned_kid_id: assignedKid.value,
+                  due_type: dueType.value,
+                  gates_pay: gatesPay.value,
+                  is_risky: isRisky.value,
+              };
+    await authFetch<Chore>('/chores', { method: 'POST', body });
 }
 
 // --- edit an existing template (inline) ---
@@ -497,7 +573,11 @@ onUnmounted(() => {
             <form @submit.prevent="createChore">
                 <!-- PAID: gamified picker + XP -->
                 <template v-if="choreType === 'paid'">
-                    <ChorePicker @select="onPreset" />
+                    <ChorePicker
+                        :selected="pickedKeys"
+                        @toggle="onTogglePreset"
+                        @custom="onCustom"
+                    />
 
                     <!-- Custom chore → name it yourself (+ optional fun name) -->
                     <template v-if="isCustom">
@@ -522,18 +602,61 @@ onUnmounted(() => {
                             "
                         />
                     </template>
-                    <!-- Preset → the fun name kids see, plain name beneath -->
-                    <div v-else-if="title" class="chosen">
-                        <span class="chosen-emoji">{{ emoji || '📋' }}</span>
-                        <span class="chosen-names">
-                            <strong>{{ questTitle || title }}</strong>
-                            <span v-if="questTitle" class="chosen-plain">{{
-                                title
-                            }}</span>
-                        </span>
-                    </div>
+                    <!-- Presets → one row each: icon, fun name (plain beneath), XP -->
+                    <ul v-else-if="picked.length" class="picked">
+                        <li
+                            v-for="c in picked"
+                            :key="c.questTitle"
+                            class="chosen"
+                        >
+                            <EmojiField
+                                :model-value="c.emoji"
+                                @update:model-value="
+                                    updatePicked(c.questTitle, {
+                                        emoji: $event,
+                                    })
+                                "
+                            />
+                            <span class="chosen-names">
+                                <strong>{{ c.questTitle }}</strong>
+                                <span class="chosen-plain">{{ c.title }}</span>
+                            </span>
+                            <input
+                                class="xp-mini"
+                                type="number"
+                                inputmode="numeric"
+                                min="0"
+                                :aria-label="`XP for ${c.title}`"
+                                :value="c.xp ?? ''"
+                                @input="
+                                    updatePicked(c.questTitle, {
+                                        xp:
+                                            Number(
+                                                (
+                                                    $event.target as HTMLInputElement
+                                                ).value,
+                                            ) || null,
+                                    })
+                                "
+                            />
+                            <span class="xp-unit">XP</span>
+                            <button
+                                type="button"
+                                class="notes-toggle"
+                                :aria-label="`Remove ${c.title}`"
+                                title="Remove"
+                                @click="
+                                    picked = picked.filter(
+                                        (p) => p.questTitle !== c.questTitle,
+                                    )
+                                "
+                            >
+                                ✖️
+                            </button>
+                        </li>
+                    </ul>
 
-                    <div v-if="isCustom || title" class="row">
+                    <div v-if="isCustom" class="row">
                         <div class="icon-col">
                             <span class="field-label">Icon</span>
                             <EmojiField v-model="emoji" />
@@ -556,11 +679,12 @@ onUnmounted(() => {
                     </div>
 
                     <!-- §3b eligibility: which kids may claim it -->
-                    <div
-                        v-if="(isCustom || title) && kids.length"
-                        class="field"
-                    >
-                        <span class="field-label">Who can claim this?</span>
+                    <div v-if="hasPaidDraft && kids.length" class="field">
+                        <span class="field-label">{{
+                            picked.length > 1
+                                ? 'Who can claim these?'
+                                : 'Who can claim this?'
+                        }}</span>
                         <p class="muted small">
                             Leave all unchecked to let any kid claim it.
                         </p>
@@ -577,7 +701,7 @@ onUnmounted(() => {
                             <span>{{ k.display_name }}</span>
                         </label>
                     </div>
-                    <label v-if="isCustom || title" class="check-field">
+                    <label v-if="hasPaidDraft" class="check-field">
                         <input v-model="isRisky" type="checkbox" />
                         <span
                             >⚠️ Risky — warn before making it available to a
@@ -646,16 +770,30 @@ onUnmounted(() => {
                 <mfp-button
                     type="submit"
                     variant="primary"
-                    :disabled="creating || !title"
+                    :disabled="creating || !canSubmit"
                 >
-                    {{ creating ? 'Adding…' : 'Add chore' }}
+                    {{
+                        creating
+                            ? 'Adding…'
+                            : picked.length > 1
+                              ? `Add ${picked.length} chores`
+                              : 'Add chore'
+                    }}
                 </mfp-button>
 
                 <!-- §3b soft confirmation before a risky chore reaches a young kid -->
                 <div v-if="riskyPrompt" class="risky-confirm">
                     <span class="risky-q">
-                        ⚠️ This chore is marked risky, and {{ riskyPrompt }} may
-                        be under {{ RISKY_AGE }}. Make it available anyway?
+                        ⚠️
+                        {{
+                            picked.length > 1
+                                ? 'These chores are'
+                                : 'This chore is'
+                        }}
+                        marked risky, and {{ riskyPrompt }} may be under
+                        {{ RISKY_AGE }}. Make
+                        {{ picked.length > 1 ? 'them' : 'it' }} available
+                        anyway?
                     </span>
                     <div class="risky-btns">
                         <mfp-button
@@ -1170,13 +1308,38 @@ form {
     border-radius: var(--radius-md, 0.75rem);
     background: var(--color-brand-subtle, #efe7ff);
 }
-.chosen-emoji {
-    font-size: 1.5rem;
+.picked {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
 }
 .chosen-names {
+    flex: 1;
+    min-width: 0;
     display: flex;
     flex-direction: column;
     line-height: 1.2;
+    overflow-wrap: anywhere;
+}
+.xp-mini {
+    width: 4rem;
+    flex: none;
+    box-sizing: border-box;
+    min-height: 44px;
+    padding: 0.4rem;
+    border: 2px solid var(--color-surface-muted, #e6e0f5);
+    border-radius: var(--radius-md, 0.75rem);
+    background: var(--color-surface, #fff);
+    font: inherit;
+    color: var(--color-text-default);
+}
+.xp-unit {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--color-brand-primary, #6c4ce0);
 }
 .chosen-plain {
     font-size: 0.8rem;

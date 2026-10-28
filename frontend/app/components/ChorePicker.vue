@@ -1,19 +1,21 @@
 <script setup lang="ts">
-// Searchable chore picker. Common chores come pre-gamified (a quest-flavored
-// name kids see) with the plain name kept for search + a subtitle hint. Typing
-// filters the presets below. A "Create a custom chore" option is pinned at the
-// TOP of the list (it reflects whatever you've typed) so making your own is an
-// explicit choice, not a search side effect. Emits `select`; a custom pick sets
-// `custom: true` so the form shows an editable name field.
+// Searchable, multi-select chore picker. Common chores come pre-gamified (a
+// quest-flavored name kids see) with the plain name kept for search + a
+// subtitle hint. Typing filters the presets below. Tapping a preset toggles it
+// (emits `toggle`) and the menu stays open so a parent can pick several in one
+// go; `selected` (preset titles) drives the checkmarks. A "Create a custom
+// chore" option is pinned at the TOP (it reflects whatever you've typed) so
+// making your own is an explicit choice — it emits `custom` and closes, since a
+// custom chore is named and added one at a time.
 export interface ChorePreset {
     title: string; // gamified, quest-flavored name (what kids see)
     plain: string; // plain name — for search + a subtitle hint
     emoji: string;
     xp: number;
-    custom?: boolean; // true when the parent chose "Create a custom chore"
 }
 
-const emit = defineEmits<{ select: [ChorePreset] }>();
+const props = defineProps<{ selected: string[] }>();
+const emit = defineEmits<{ toggle: [ChorePreset]; custom: [string] }>();
 
 // Suggested XP ≈ effort; 1 XP = 1¢, so it doubles as a starting reward.
 const COMMON: ChorePreset[] = [
@@ -172,16 +174,23 @@ const filtered = computed(() => {
     );
 });
 
-function choose(preset: ChorePreset) {
-    emit('select', preset);
+function isSelected(preset: ChorePreset): boolean {
+    return props.selected.includes(preset.title);
+}
+
+// Keep the query so a parent can tick several matches of one search.
+function toggle(preset: ChorePreset) {
+    emit('toggle', preset);
+}
+
+function createCustom() {
+    // Allow an empty name — the form shows an editable name field for customs.
+    emit('custom', query.value.trim());
     query.value = '';
     open.value = false;
 }
 
-function createCustom() {
-    const title = query.value.trim();
-    // Allow an empty name — the form shows an editable name field for customs.
-    emit('select', { title, plain: title, emoji: '', xp: 0, custom: true });
+function done() {
     query.value = '';
     open.value = false;
 }
@@ -197,7 +206,7 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onDocPointer));
 
 <template>
     <div ref="root" class="combo">
-        <label class="lbl">Pick a chore</label>
+        <label class="lbl">Pick chores</label>
         <input
             class="search"
             type="text"
@@ -229,7 +238,16 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onDocPointer));
 
             <ul v-if="filtered.length" class="opts">
                 <li v-for="c in filtered" :key="c.title">
-                    <button type="button" class="opt" @click="choose(c)">
+                    <button
+                        type="button"
+                        class="opt"
+                        :class="{ sel: isSelected(c) }"
+                        :aria-pressed="isSelected(c)"
+                        @click="toggle(c)"
+                    >
+                        <span class="check" aria-hidden="true">{{
+                            isSelected(c) ? '✓' : ''
+                        }}</span>
                         <span class="e">{{ c.emoji }}</span>
                         <span class="t">
                             <span class="quest">{{ c.title }}</span>
@@ -243,6 +261,12 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onDocPointer));
                 No preset matches — use <strong>Create a custom chore</strong>
                 above.
             </p>
+
+            <!-- Explicit close for phones (tapping outside also closes). -->
+            <div class="menu-foot">
+                <span class="count">{{ props.selected.length }} picked</span>
+                <button type="button" class="done" @click="done">Done</button>
+            </div>
         </div>
     </div>
 </template>
@@ -302,8 +326,53 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onDocPointer));
     border-radius: var(--radius-sm, 0.5rem);
     cursor: pointer;
 }
-.opt:hover {
+.opt:hover,
+.opt.sel {
     background: var(--color-brand-subtle, #efe7ff);
+}
+.opt .check {
+    flex: none;
+    width: 1.25rem;
+    height: 1.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    font-weight: 800;
+    border: 2px solid var(--color-surface-muted, #e6e2ef);
+    border-radius: var(--radius-sm, 0.35rem);
+    color: var(--color-surface, #fff);
+}
+.opt.sel .check {
+    border-color: var(--color-brand-primary, #6c4ce0);
+    background: var(--color-brand-primary, #6c4ce0);
+}
+.menu-foot {
+    position: sticky;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.4rem 0.5rem;
+    border-top: 1px solid var(--color-surface-muted, #e6e2ef);
+    background: var(--color-surface, #fff);
+}
+.menu-foot .count {
+    font-size: 0.82rem;
+    color: var(--color-text-muted, #6b6672);
+}
+.menu-foot .done {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0 1rem;
+    border: none;
+    border-radius: var(--radius-sm, 0.5rem);
+    background: var(--color-brand-primary, #6c4ce0);
+    color: var(--color-text-on-brand, #fff);
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
 }
 .opt .e {
     font-size: 1.35rem;
