@@ -157,7 +157,7 @@ becomes your `API_BASE` in Part B.
    | `SUPABASE_URL`                   | your Frula project URL                                       |
    | `SUPABASE_KEY`                   | your anon key (same value as the backend's ANON)             |
    | `API_BASE`                       | your backend URL from Part A (Render or Railway)             |
-   | `NUXT_PUBLIC_TURNSTILE_SITE_KEY` | optional: Turnstile site key (see "Turn on sign-in CAPTCHA") |
+   | `NUXT_PUBLIC_TURNSTILE_SITE_KEY` | required while CAPTCHA is on (see "Turn on sign-in CAPTCHA") |
 
    > `API_BASE` is baked into the app at build time, so it must be set **before**
    > this first deploy. If you change it later, redeploy the frontend.
@@ -223,6 +223,11 @@ nobody in the family can log in. Stop at the first step that fails.
    throwaway parent sign-up (delete that user afterwards). Then confirm adding a
    kid on `/family` still works (that uses the admin API, which CAPTCHA doesn't
    cover).
+
+**Local dev after this:** a localhost frontend pointed at the live project needs
+the same site key in `frontend/.env`, or no token is sent and every login fails.
+`localhost` must be in the widget's hostnames (step 1). Restart `npm run dev`
+after adding it.
 
 **Rollback:** Supabase → Attack Protection → turn CAPTCHA off. It takes effect at
 once with no deploy, and the widget can stay (Supabase ignores the token while

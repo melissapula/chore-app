@@ -87,8 +87,9 @@ export default defineNuxtConfig({
     },
 
     // Cloudflare Turnstile widget on /login. The real site key comes from
-    // NUXT_PUBLIC_TURNSTILE_SITE_KEY at runtime; empty means no widget (local
-    // dev, previews). Supabase Auth verifies the token, so no secretKey here.
+    // NUXT_PUBLIC_TURNSTILE_SITE_KEY at runtime; empty means no widget and no
+    // token, which only works against an Auth with CAPTCHA off (the local
+    // stack). Supabase Auth verifies the token, so no secretKey here.
     turnstile: {
         siteKey: '',
     },

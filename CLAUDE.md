@@ -305,7 +305,8 @@ helpers (`helpers/setup.psql`) and rolls back. CI runs the same in the
 
 Environment: copy `backend/.env.example` → `backend/.env` and
 `frontend/.env.example` → `frontend/.env`, then fill in Supabase URL + keys.
-Never commit `.env`.
+Against the live project the frontend also needs `NUXT_PUBLIC_TURNSTILE_SITE_KEY`
+(CAPTCHA is enforced; without it login fails). Never commit `.env`.
 
 ## How to deploy
 
