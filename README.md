@@ -54,7 +54,7 @@ npm run start:dev
 
 ```bash
 cd frontend
-cp .env.example .env      # fill in SUPABASE_URL + anon key
+cp .env.example .env      # fill in SUPABASE_URL + anon key + Turnstile site key
 npm install
 npm run dev
 ```
