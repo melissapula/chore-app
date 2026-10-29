@@ -56,6 +56,36 @@ interface PickedChore {
 // SPEC §3b: the risky-chore warning only fires for kids under this age.
 const RISKY_AGE = 12;
 
+// Required-chore presets: tapping one fills the name, fun name and icon. No XP —
+// required chores are unpaid. One at a time, since each is assigned to one kid.
+interface RequiredPreset {
+    plain: string;
+    quest: string;
+    emoji: string;
+}
+const REQUIRED_PRESETS: RequiredPreset[] = [
+    {
+        plain: 'Put dirty clothes in the hamper',
+        quest: 'Seal the cursed socks in the vault',
+        emoji: '🧺',
+    },
+    {
+        plain: 'Tidy your bedroom',
+        quest: "Tidy the hero's hideout",
+        emoji: '🏰',
+    },
+    {
+        plain: 'Do your homework',
+        quest: "Complete the scholar's trial",
+        emoji: '📚',
+    },
+    {
+        plain: 'Practice your instrument',
+        quest: 'Train your bardic powers',
+        emoji: '🎻',
+    },
+];
+
 const templates = ref<Chore[]>([]);
 const pool = ref<Instance[]>([]);
 const kids = ref<Kid[]>([]);
@@ -200,6 +230,12 @@ function onCustom(name: string) {
     emoji.value = '';
     xp.value = null;
     isCustom.value = true;
+}
+
+function applyRequiredPreset(p: RequiredPreset) {
+    title.value = p.plain;
+    questTitle.value = p.quest;
+    emoji.value = p.emoji;
 }
 
 const onTabKeys = useTabKeys(['paid', 'required'] as const, choreType, (t) =>
@@ -715,6 +751,30 @@ onUnmounted(() => {
 
                 <!-- REQUIRED: name + assignee + due + pay gate -->
                 <template v-else>
+                    <div class="field">
+                        <span class="field-label">Quick picks</span>
+                        <div class="req-presets">
+                            <button
+                                v-for="p in REQUIRED_PRESETS"
+                                :key="p.plain"
+                                type="button"
+                                class="req-preset"
+                                :class="{ sel: title === p.plain }"
+                                :aria-pressed="title === p.plain"
+                                @click="applyRequiredPreset(p)"
+                            >
+                                <span class="req-preset-emoji">{{
+                                    p.emoji
+                                }}</span>
+                                <span class="chosen-names">
+                                    <strong>{{ p.quest }}</strong>
+                                    <span class="chosen-plain">{{
+                                        p.plain
+                                    }}</span>
+                                </span>
+                            </button>
+                        </div>
+                    </div>
                     <mfp-input
                         label="Chore name"
                         name="reqTitle"
@@ -722,6 +782,16 @@ onUnmounted(() => {
                         :value.prop="title"
                         @input="
                             title = ($event.target as HTMLInputElement).value
+                        "
+                    />
+                    <mfp-input
+                        label="Fun name kids see (optional)"
+                        name="reqQuestTitle"
+                        placeholder="Tame the bed-beast"
+                        :value.prop="questTitle"
+                        @input="
+                            questTitle = ($event.target as HTMLInputElement)
+                                .value
                         "
                     />
                     <div class="row">
@@ -1347,6 +1417,32 @@ form {
 .chosen-plain {
     font-size: 0.8rem;
     color: var(--color-text-muted);
+}
+.req-presets {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+.req-preset {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    min-height: 44px;
+    padding: 0.5rem 0.75rem;
+    border: 2px solid var(--color-surface-muted, #e6e0f5);
+    border-radius: var(--radius-md, 0.75rem);
+    background: var(--color-surface, #fff);
+    color: var(--color-text-default);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+.req-preset.sel {
+    border-color: var(--color-brand-primary, #6c4ce0);
+    background: var(--color-brand-subtle, #efe7ff);
+}
+.req-preset-emoji {
+    font-size: 1.35rem;
 }
 .emoji-in {
     width: 5rem;

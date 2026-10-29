@@ -173,7 +173,9 @@ Every table below carries a `household_id` for tenant isolation (enforced via Su
 > when unset. The create-chore form offers a "✨ make it epic" button that suggests
 > a flavored name (a template/word-bank generator to start; could call an LLM
 > later). Pure display flavor — it never changes a chore's type, XP value, or state
-> machine.
+> machine. The Required tab offers its own quick-pick presets (hamper, tidy room,
+> homework, instrument practice) that fill the plain name, fun name and icon; the
+> parent still picks the kid, due date and pay gate.
 
 ### chore_instances (the live, claimable items)
 
